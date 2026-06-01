@@ -1732,7 +1732,7 @@ function bindContactForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
       });
-      const json = await response.json();
+      const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Submit failed");
       form.reset();
       status.innerHTML = `
@@ -1774,7 +1774,7 @@ function bindProviderTools() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data)
         });
-        const json = await response.json();
+        const json = await readApiJson(response);
         if (!response.ok) throw new Error(json.error || "Submit failed");
         form.reset();
         status.innerHTML = `
@@ -1831,7 +1831,7 @@ function bindChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: chatSessionId(), message: text })
       });
-      const json = await response.json();
+      const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Chat failed");
       history.push({ role: "bot", text: json.answer });
       draw();
@@ -1939,6 +1939,24 @@ function setCurrentLiveChatSession(id) {
   else localStorage.removeItem("ehc_live_chat_session");
 }
 
+async function readApiJson(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  if (!contentType.includes("application/json")) {
+    const pageTitle = text.match(/<title>(.*?)<\/title>/i)?.[1];
+    throw new Error(
+      pageTitle
+        ? `API returned an HTML page (${pageTitle}). Check that the Node server is running and the /api route is deployed.`
+        : "API returned HTML instead of JSON. Check that the Node server is running and the /api route is deployed."
+    );
+  }
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("API returned invalid JSON. Please restart the Node server and try again.");
+  }
+}
+
 function bindLiveChatWidget() {
   const widget = document.getElementById("live-chat-widget");
   if (!widget) return;
@@ -1958,7 +1976,7 @@ function bindLiveChatWidget() {
           sourcePage: `${window.location.pathname}${window.location.search}`
         })
       });
-      const json = await response.json();
+      const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Could not open live chat.");
       setCurrentLiveChatSession(json.thread.id);
       toggle.classList.add("active");
@@ -2058,7 +2076,7 @@ function bindLiveChatWidget() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data)
         });
-        const json = await response.json();
+        const json = await readApiJson(response);
         if (!response.ok) throw new Error(json.error || "Could not start live chat.");
         setCurrentLiveChatSession(json.thread.id);
         toggle.classList.add("active");
@@ -2176,7 +2194,7 @@ function bindLiveChatWidget() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId: currentLiveChatSession(), message })
         });
-        const json = await response.json();
+        const json = await readApiJson(response);
         if (!response.ok) throw new Error(json.error || "Could not send message.");
         drawLiveThread(json.thread, { forceBottom: true, typing: json.typing });
       } catch (error) {
@@ -2196,7 +2214,7 @@ function bindLiveChatWidget() {
       const activeInput = document.activeElement?.id === "live-chat-message" ? document.getElementById("live-chat-message") : null;
       const draft = activeInput?.value || "";
       const response = await fetch(`/api/live/thread?sessionId=${encodeURIComponent(sessionId)}`);
-      const json = await response.json();
+      const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Could not load live chat.");
       drawLiveThread(json.thread, {
         preserveScroll: options.quiet,
@@ -2227,7 +2245,7 @@ function bindAdminLogin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(Object.fromEntries(new FormData(form).entries()))
       });
-      const json = await response.json();
+      const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Login failed");
       navigate("/admin/dashboard");
     } catch (error) {
@@ -2254,7 +2272,7 @@ function bindAdminPages() {
 
 async function adminFetch(path) {
   const response = await fetch(path);
-  const json = await response.json();
+  const json = await readApiJson(response);
   if (response.status === 401) {
     navigate("/admin/login");
     throw new Error("Admin login required.");
@@ -2269,7 +2287,7 @@ async function adminPost(path, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  const json = await response.json();
+  const json = await readApiJson(response);
   if (response.status === 401) {
     navigate("/admin/login");
     throw new Error("Admin login required.");
