@@ -1350,6 +1350,14 @@ textarea::placeholder {
   font-size: 0.8rem;
 }
 
+.live-chat-head .icon-btn {
+  color: #ffffff;
+}
+
+.live-chat-head .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .live-chat-content {
   max-height: min(640px, calc(100vh - 150px));
   overflow-y: auto;
