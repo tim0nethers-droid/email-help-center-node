@@ -1951,6 +1951,28 @@ function setCurrentLiveChatSession(id) {
   else localStorage.removeItem("ehc_live_chat_session");
 }
 
+function readSavedLiveChatVisitor() {
+  const visitor = readLocalJson("ehc_live_chat_visitor", {});
+  return {
+    name: visitor.name || "",
+    phone: visitor.phone || "",
+    email: visitor.email || "",
+    company: visitor.company || ""
+  };
+}
+
+function saveLiveChatVisitor(visitor) {
+  localStorage.setItem(
+    "ehc_live_chat_visitor",
+    JSON.stringify({
+      name: visitor.name || "",
+      phone: visitor.phone || "",
+      email: visitor.email || "",
+      company: visitor.company || ""
+    })
+  );
+}
+
 function readLocalJson(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
@@ -2011,10 +2033,15 @@ function bindLiveChatWidget() {
     }
   }
 
-  async function setOpen(open) {
+  async function setOpen(open, options = {}) {
     widget.classList.toggle("open", open);
-    localStorage.setItem("ehc_live_chat_open", open ? "true" : "false");
+    if (!options.auto) localStorage.setItem("ehc_live_chat_open", open ? "true" : "false");
+    if (!open && options.manual) sessionStorage.setItem("ehc_live_chat_closed", "1");
     if (open) {
+      if (options.auto && !currentLiveChatSession()) {
+        drawStartForm();
+        return;
+      }
       await ensureLiveChatSession();
       loadLiveChatThread();
     }
@@ -2033,12 +2060,21 @@ function bindLiveChatWidget() {
     }, 2500);
   }
 
-  toggle.addEventListener("click", () => setOpen(!widget.classList.contains("open")));
-  close.addEventListener("click", () => setOpen(false));
+  toggle.addEventListener("click", () => setOpen(!widget.classList.contains("open"), { manual: true }));
+  close.addEventListener("click", () => setOpen(false, { manual: true }));
 
   function drawStartForm(message = "") {
     const pageProvider = currentProviderFromPath();
     const companyOptions = providerSelectOptions(pageProvider?.name || "");
+    const savedVisitor = readSavedLiveChatVisitor();
+    const activeForm = document.getElementById("live-chat-start-form");
+    const currentValues = activeForm ? Object.fromEntries(new FormData(activeForm).entries()) : {};
+    const formValues = {
+      name: currentValues.name || savedVisitor.name,
+      phone: currentValues.phone || savedVisitor.phone,
+      email: currentValues.email || savedVisitor.email,
+      company: currentValues.company || savedVisitor.company
+    };
     const issueOptions = [
       "Can't log in",
       "Forgot password",
@@ -2056,9 +2092,9 @@ function bindLiveChatWidget() {
       <form class="form live-start-form" id="live-chat-start-form">
         <input type="hidden" name="sessionId" value="${escapeHtml(currentLiveChatSession())}">
         <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
-        <div class="field"><label>Name</label><input name="name" required placeholder="Your name"></div>
-        <div class="field"><label>Phone</label><input name="phone" required inputmode="tel" placeholder="+1 555 123 4567"></div>
-        <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com"></div>
+        <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
+        <div class="field"><label>Phone</label><input name="phone" required inputmode="tel" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone)}"></div>
+        <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
         <div class="field">
           <label>Company</label>
           <select name="company" required>
@@ -2078,6 +2114,9 @@ function bindLiveChatWidget() {
       </form>
       ${message ? `<div class="notice" style="margin-top:12px">${escapeHtml(message)}</div>` : ""}`;
 
+    const companySelect = document.querySelector('#live-chat-start-form select[name="company"]');
+    if (companySelect && formValues.company) companySelect.value = formValues.company;
+
     document.querySelectorAll("[data-live-issue]").forEach((button) => {
       button.addEventListener("click", () => {
         document.querySelectorAll("[data-live-issue]").forEach((item) => item.classList.toggle("active", item === button));
@@ -2091,6 +2130,7 @@ function bindLiveChatWidget() {
       event.preventDefault();
       const form = event.currentTarget;
       const data = Object.fromEntries(new FormData(form).entries());
+      saveLiveChatVisitor(data);
       try {
         const response = await fetch("/api/live/start", {
           method: "POST",
@@ -2100,6 +2140,7 @@ function bindLiveChatWidget() {
         const json = await readApiJson(response);
         if (!response.ok) throw new Error(json.error || "Could not start live chat.");
         setCurrentLiveChatSession(json.thread.id);
+        localStorage.setItem("ehc_live_chat_open", "true");
         toggle.classList.add("active");
         const label = toggle.querySelector("span:last-child");
         if (label) label.textContent = "Chat Active";
@@ -2249,8 +2290,24 @@ function bindLiveChatWidget() {
     }
   }
 
+  function scheduleLiveChatAutoOpen() {
+    if (isInternalPath()) return;
+    if (sessionStorage.getItem("ehc_live_chat_closed") === "1") return;
+    if (sessionStorage.getItem("ehc_live_chat_auto_opened") === "1") return;
+    if (widget.classList.contains("open")) return;
+    setTimeout(() => {
+      if (isInternalPath()) return;
+      if (sessionStorage.getItem("ehc_live_chat_closed") === "1") return;
+      if (sessionStorage.getItem("ehc_live_chat_auto_opened") === "1") return;
+      if (widget.classList.contains("open")) return;
+      sessionStorage.setItem("ehc_live_chat_auto_opened", "1");
+      setOpen(true, { auto: true });
+    }, 10000);
+  }
+
   if (widget.classList.contains("open")) setOpen(true);
   if (currentLiveChatSession()) startLiveChatPolling();
+  scheduleLiveChatAutoOpen();
 }
 
 function bindAdminLogin() {
