@@ -1,0 +1,18 @@
+{
+  "name": "email-help-center-node",
+  "version": "1.0.0",
+  "description": "Independent email help center built with Node.js, including provider guides, AI-style tools, contact submissions, chat, and admin views.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "node",
+    "email-help",
+    "support",
+    "chat",
+    "contact-form"
+  ],
+  "author": "",
+  "license": "MIT"
+}
