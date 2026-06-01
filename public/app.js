@@ -944,7 +944,20 @@ function footer() {
     </footer>`;
 }
 
+function isInternalPath(pathname = window.location.pathname) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return (
+    path === "/login" ||
+    path === "/dashboard" ||
+    path === "/settings" ||
+    path === "/reports" ||
+    path === "/auth" ||
+    path.startsWith("/admin")
+  );
+}
+
 function liveChatWidget() {
+  if (isInternalPath()) return "";
   const isOpen = localStorage.getItem("ehc_live_chat_open") === "true";
   const activeSession = Boolean(currentLiveChatSession());
   return `
@@ -1683,6 +1696,7 @@ function bindGlobalEvents() {
 
   document.querySelectorAll("[data-open-live-chat]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (isInternalPath()) return;
       localStorage.setItem("ehc_live_chat_open", "true");
       render();
     });
@@ -1713,7 +1727,7 @@ function bindPageEvents() {
   bindChat();
   bindTools();
   bindProviderTools();
-  bindLiveChatWidget();
+  if (!isInternalPath()) bindLiveChatWidget();
   bindAdminLogin();
   bindAdminPages();
 }
