@@ -2,11 +2,11 @@
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface-soft: #f1f5f9;
-  --text: #172033;
-  --muted: #65738a;
-  --border: #dce3ec;
-  --primary: #1267d8;
-  --primary-dark: #0f4fad;
+  --text: #0f172a;
+  --muted: #475569;
+  --border: #cbd5e1;
+  --primary: #1d4ed8;
+  --primary-dark: #1e40af;
   --teal: #0f9f8f;
   --amber: #f59e0b;
   --rose: #e54861;
@@ -79,7 +79,7 @@ button {
 
 .disclaimer-bar {
   background: #ffffff;
-  color: #374151;
+  color: #475569;
   border-bottom: 1px solid var(--border);
   font-size: 0.82rem;
 }
@@ -145,6 +145,10 @@ button {
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
+}
+
+.disclaimer-bar svg {
+  color: #334155;
 }
 
 .button svg,
@@ -363,7 +367,7 @@ button {
 .hero-subtitle {
   max-width: 720px;
   margin: 0 0 28px;
-  color: #354258;
+  color: #334155;
   font-size: clamp(1.05rem, 2vw, 1.28rem);
   line-height: 1.65;
 }
@@ -385,6 +389,12 @@ button {
   outline: 0;
   padding: 0 14px;
   color: var(--text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
 }
 
 .button {
@@ -468,10 +478,11 @@ button {
 .feature-item strong {
   display: block;
   margin-bottom: 4px;
+  color: var(--text);
 }
 
 .feature-item span:last-child {
-  color: var(--muted);
+  color: #334155;
   font-size: 0.88rem;
   line-height: 1.45;
 }
@@ -597,7 +608,7 @@ button {
 .section-heading p,
 .page-hero p {
   margin: 12px 0 0;
-  color: var(--muted);
+  color: #475569;
   font-size: 1.05rem;
   line-height: 1.65;
 }
@@ -639,7 +650,7 @@ button {
 
 .card p {
   margin: 0;
-  color: var(--muted);
+  color: #475569;
   line-height: 1.6;
 }
 
@@ -1857,7 +1868,7 @@ button {
 
 .footer p,
 .footer a {
-  color: var(--muted);
+  color: #475569;
 }
 
 .footer a {
@@ -1873,7 +1884,7 @@ button {
   border-top: 1px solid var(--border);
   margin-top: 30px;
   padding-top: 20px;
-  color: var(--muted);
+  color: #475569;
   font-size: 0.9rem;
 }
 
