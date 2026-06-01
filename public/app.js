@@ -1805,7 +1805,7 @@ function bindChat() {
   const form = document.getElementById("chat-form");
   if (!windowEl || !form) return;
 
-  const history = JSON.parse(localStorage.getItem("ehc_chat_history") || "[]");
+  const history = readLocalJson("ehc_chat_history", []);
   if (!history.length) {
     history.push({
       role: "bot",
@@ -1937,6 +1937,15 @@ function currentLiveChatSession() {
 function setCurrentLiveChatSession(id) {
   if (id) localStorage.setItem("ehc_live_chat_session", id);
   else localStorage.removeItem("ehc_live_chat_session");
+}
+
+function readLocalJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    localStorage.removeItem(key);
+    return fallback;
+  }
 }
 
 async function readApiJson(response) {
