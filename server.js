@@ -807,7 +807,8 @@ async function handleApi(req, res, url) {
 async function recordVisit(req, url) {
   if (req.method !== "GET") return;
   if (url.pathname.startsWith("/api/") || url.pathname.includes(".")) return;
-  if (url.pathname === "/auth" || url.pathname.startsWith("/admin")) return;
+  const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
+  if (normalizedPath === "/admin" || normalizedPath.startsWith("/admin/") || normalizedPath === "/auth" || normalizedPath.startsWith("/auth/")) return;
   const visit = {
     id: crypto.randomUUID(),
     path: url.pathname,

@@ -946,14 +946,7 @@ function footer() {
 
 function isInternalPath(pathname = window.location.pathname) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return (
-    path === "/login" ||
-    path === "/dashboard" ||
-    path === "/settings" ||
-    path === "/reports" ||
-    path === "/auth" ||
-    path.startsWith("/admin")
-  );
+  return path === "/admin" || path.startsWith("/admin/") || path === "/auth" || path.startsWith("/auth/");
 }
 
 function liveChatWidget() {
@@ -1647,6 +1640,7 @@ function routeContent() {
   if (path === "/admin/login") return adminLoginPage();
   if (path === "/admin/chat") return adminPage("live");
   if (path === "/admin/leads") return adminPage("support");
+  if (path === "/admin/forms") return adminPage("support");
   if (path.startsWith("/admin/")) return adminPage(parts[1]);
   if (path === "/search") return searchPage(url.searchParams.get("q") || "");
   if (parts[0] === "provider" && parts[1]) {
@@ -1662,8 +1656,12 @@ function routeContent() {
 }
 
 function render() {
+  const internalPath = isInternalPath();
   document.body.classList.toggle("menu-open", mobileOpen);
-  document.getElementById("app").innerHTML = `${header()}${routeContent()}${universalSupportBand()}${footer()}${liveChatWidget()}`;
+  document.body.classList.toggle("admin-shell", internalPath);
+  document.getElementById("app").innerHTML = internalPath
+    ? routeContent()
+    : `${header()}${routeContent()}${universalSupportBand()}${footer()}${liveChatWidget()}`;
   bindGlobalEvents();
   bindPageEvents();
 }
