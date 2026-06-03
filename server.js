@@ -11,6 +11,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const FALLBACK_ADMIN_PASSWORD_HASH = "e6178ee9cbe89eae6fbf0eacf486575697dc7a04dbd5e798a7b24c4939bf95c6";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
+const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
@@ -381,15 +382,28 @@ async function writeLiveChats(rows) {
   await writeJson(files.liveChats, rows.slice(0, 500));
 }
 
-function makeLiveMessage(from, text, name) {
+function makeLiveMessage(from, text, name, extra = {}) {
   return {
     id: crypto.randomUUID(),
     from,
     name: cleanText(name, 120) || (from === "agent" ? "Support Team" : "Visitor"),
     text: redactSecrets(text),
     createdAt: new Date().toISOString(),
-    readByAdmin: from !== "visitor"
+    readByAdmin: from !== "visitor",
+    ...extra
   };
+}
+
+function hasAutoReply(thread) {
+  return (thread.messages || []).some((message) => message.autoReply === true);
+}
+
+function addAutoReplyIfMissing(thread) {
+  thread.messages = thread.messages || [];
+  if (!hasAutoReply(thread)) {
+    thread.messages.push(makeLiveMessage("agent", AUTO_REPLY_MESSAGE, "Support Team", { autoReply: true, senderType: "auto-reply" }));
+  }
+  return thread;
 }
 
 async function updateLiveChat(threadId, updater) {
@@ -504,6 +518,12 @@ async function handleApi(req, res, url) {
         visitorMessage,
         makeLiveMessage(
           "agent",
+          AUTO_REPLY_MESSAGE,
+          "Support Team",
+          { autoReply: true, senderType: "auto-reply" }
+        ),
+        makeLiveMessage(
+          "agent",
           "Chat started. Admin can see this ticket.",
           "Support Team"
         ),
@@ -524,6 +544,7 @@ async function handleApi(req, res, url) {
       thread.updatedAt = new Date().toISOString();
       const hasVisitorMessage = (thread.messages || []).some((message) => message.from === "visitor");
       thread.messages = hasVisitorMessage ? thread.messages : initialMessages;
+      addAutoReplyIfMissing(thread);
       rows[existingIndex] = thread;
       rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
     } else {
@@ -593,6 +614,7 @@ async function handleApi(req, res, url) {
     const updated = await updateLiveChat(sessionId, (thread) => {
       thread.messages = thread.messages || [];
       thread.messages.push(makeLiveMessage("visitor", message, thread.visitor?.name || "Visitor"));
+      addAutoReplyIfMissing(thread);
       const previousBotSteps = thread.messages.filter((item) => item.from === "agent" && item.name === "Email Bot").length;
       thread.messages.push(makeLiveMessage("agent", liveBotReply(thread.visitor?.issue || message, thread.visitor?.company, previousBotSteps), "Email Bot"));
       thread.status = "open";

@@ -2979,7 +2979,10 @@ async function loadAdmin(kind, content) {
     if (kind === "settings") {
       content.innerHTML =
         statHtml +
-        `<div class="card"><div class="card-body"><h3>Settings</h3><p>Set <code>PORT</code>, <code>ADMIN_ID</code>, and <code>ADMIN_PASSWORD</code> as environment variables before starting the Node server. Current local defaults are <code>admin</code> / <code>admin123</code> unless changed.</p></div></div>`;
+        `<div class="grid two">
+          <div class="card"><div class="card-body"><h3>Server Settings</h3><p>Set <code>PORT</code>, <code>ADMIN_ID</code>, and <code>ADMIN_PASSWORD</code> as environment variables before starting the Node server. Current local defaults are <code>admin</code> / <code>admin123</code> unless changed.</p></div></div>
+          <div class="card"><div class="card-body"><h3>Auto Reply Message</h3><p>Thank you. I will call you back shortly.</p><p class="helper">This default message is sent once when a visitor starts a live chat.</p></div></div>
+        </div>`;
       return;
     }
 
