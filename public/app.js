@@ -2572,6 +2572,209 @@ function adminQuickActions(stats) {
     </section>`;
 }
 
+function shortBrowser(userAgent = "") {
+  const value = String(userAgent || "");
+  if (!value) return "Unknown";
+  const browser = value.includes("Edg/")
+    ? "Edge"
+    : value.includes("Chrome/")
+      ? "Chrome"
+      : value.includes("Firefox/")
+        ? "Firefox"
+        : value.includes("Safari/")
+          ? "Safari"
+          : "Browser";
+  const device = /Mobile|Android|iPhone|iPad/i.test(value) ? "Mobile" : "Desktop";
+  return `${browser} / ${device}`;
+}
+
+function adminReportSummary(exported) {
+  const liveChats = exported.liveChats || [];
+  const leads = exported.leads || [];
+  const chats = exported.chats || [];
+  const visits = exported.visits || [];
+  const cards = [
+    ["Total Visits", visits.length, icons.mail, "blue"],
+    ["Live Chats", liveChats.length, icons.reply, "green"],
+    ["Leads", leads.length, icons.inbox, "teal"],
+    ["AI Chats", chats.length, icons.bot, "purple"],
+    ["Open Chats", liveChats.filter((thread) => thread.status === "open").length, icons.chart, "orange"],
+    ["Missed Chats", liveChats.filter((thread) => thread.status === "closed" && (thread.messages || []).some((message) => message.from === "visitor" && !message.readByAdmin)).length, icons.alert, "red"]
+  ];
+  return `
+    <div class="admin-report-summary">
+      ${cards
+        .map(
+          ([label, value, cardIcon, tone]) => `
+          <div class="admin-stat admin-stat-modern ${tone}">
+            <span class="admin-stat-icon">${cardIcon}</span>
+            <strong>${escapeHtml(value)}</strong>
+            <span>${label}</span>
+          </div>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function adminReportTable(title, headers, rows) {
+  return `
+    <section class="admin-report-section card">
+      <div class="admin-report-head">
+        <div><h3>${escapeHtml(title)}</h3><p>${rows.length} record${rows.length === 1 ? "" : "s"}</p></div>
+      </div>
+      ${
+        rows.length
+          ? `<div class="table-wrap"><table class="data-table admin-report-table">
+              <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+              <tbody>
+                ${rows
+                  .map(
+                    (row) => `<tr>${row.map((cell, index) => `<td data-label="${escapeHtml(headers[index])}">${escapeHtml(cell || "")}</td>`).join("")}</tr>`
+                  )
+                  .join("")}
+              </tbody>
+            </table></div>`
+          : `<div class="empty-state">No data yet.</div>`
+      }
+    </section>`;
+}
+
+function adminLiveChatDetails(exported) {
+  const liveChats = exported.liveChats || [];
+  if (!liveChats.length) return "";
+  return `
+    <section class="admin-report-section card">
+      <div class="admin-report-head"><div><h3>Live Chat Details</h3><p>Messages are collapsed to keep reports readable.</p></div></div>
+      <div class="admin-report-details">
+        ${liveChats
+          .map((thread) => {
+            const visitorName = thread.visitor?.name || "Anonymous Visitor";
+            return `
+              <details>
+                <summary><span>${escapeHtml(thread.ticketId || "Live Chat")}</span><strong>${escapeHtml(visitorName)}</strong><small>${(thread.messages || []).length} messages</small></summary>
+                <div class="details-history report-message-list">
+                  ${(thread.messages || [])
+                    .map(
+                      (message) => `
+                      <p><strong>${escapeHtml(message.name || (message.from === "visitor" ? "Visitor" : "Support Team"))}:</strong> ${escapeHtml(message.text || "")}<br><small>${formatDate(message.createdAt)}</small></p>`
+                    )
+                    .join("")}
+                </div>
+              </details>`;
+          })
+          .join("")}
+      </div>
+    </section>`;
+}
+
+function adminReportsPage(exported) {
+  const visits = exported.visits || [];
+  const liveChats = exported.liveChats || [];
+  const leads = exported.leads || [];
+  const visitRows = visits.map((row) => [formatDate(row.at), `${row.path || ""}${row.query || ""}`, row.ip || "", shortBrowser(row.userAgent), row.referrer || ""]);
+  const liveRows = liveChats.map((thread) => [
+    thread.ticketId || "",
+    thread.visitor?.name || "Anonymous Visitor",
+    thread.visitor?.email || "",
+    thread.visitor?.phone || "",
+    thread.visitor?.company || "",
+    thread.visitor?.issue || "",
+    thread.status || "open",
+    formatDate(thread.createdAt),
+    String((thread.messages || []).length)
+  ]);
+  const leadRows = leads.map((row) => [
+    row.name || "",
+    row.email || "",
+    row.phone || "",
+    row.category || "",
+    row.subject || row.message || "",
+    formatDate(row.createdAt)
+  ]);
+  return `
+    <div class="admin-report-toolbar card">
+      <div>
+        <h2>Reports</h2>
+        <p>Export contains ${leads.length} leads, ${(exported.chats || []).length} AI chat records, ${liveChats.length} live chats, and ${visits.length} visits.</p>
+      </div>
+      <div class="admin-report-actions">
+        <button class="button" id="report-download-json" type="button">Download JSON</button>
+        <button class="button secondary" id="report-download-csv" type="button">Download CSV</button>
+      </div>
+    </div>
+    ${adminReportSummary(exported)}
+    ${adminReportTable("Visits Report", ["Date/Time", "Page", "IP", "Browser/Device", "Referrer"], visitRows)}
+    ${adminReportTable("Live Chat Report", ["Ticket ID", "Visitor Name", "Email", "Phone", "Company", "Issue", "Status", "Created At", "Message Count"], liveRows)}
+    ${adminLiveChatDetails(exported)}
+    ${adminReportTable("Leads Report", ["Name", "Email", "Phone", "Company", "Issue", "Created At"], leadRows)}
+    <details class="admin-raw-export card">
+      <summary>Advanced: View Raw Export</summary>
+      <pre>${escapeHtml(JSON.stringify(exported, null, 2))}</pre>
+    </details>`;
+}
+
+function csvCell(value) {
+  const text = String(value || "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportedToCsv(exported) {
+  const lines = [];
+  const addSection = (title, headers, rows) => {
+    lines.push(title);
+    lines.push(headers.map(csvCell).join(","));
+    rows.forEach((row) => lines.push(row.map(csvCell).join(",")));
+    lines.push("");
+  };
+  addSection(
+    "Visits",
+    ["Date/Time", "Page", "IP", "Browser/Device", "Referrer"],
+    (exported.visits || []).map((row) => [formatDate(row.at), `${row.path || ""}${row.query || ""}`, row.ip || "", shortBrowser(row.userAgent), row.referrer || ""])
+  );
+  addSection(
+    "Live Chats",
+    ["Ticket ID", "Visitor Name", "Email", "Phone", "Company", "Issue", "Status", "Created At", "Message Count"],
+    (exported.liveChats || []).map((thread) => [
+      thread.ticketId || "",
+      thread.visitor?.name || "Anonymous Visitor",
+      thread.visitor?.email || "",
+      thread.visitor?.phone || "",
+      thread.visitor?.company || "",
+      thread.visitor?.issue || "",
+      thread.status || "open",
+      formatDate(thread.createdAt),
+      String((thread.messages || []).length)
+    ])
+  );
+  addSection(
+    "Leads",
+    ["Name", "Email", "Phone", "Company", "Issue", "Created At"],
+    (exported.leads || []).map((row) => [row.name || "", row.email || "", row.phone || "", row.category || "", row.subject || row.message || "", formatDate(row.createdAt)])
+  );
+  return lines.join("\n");
+}
+
+function downloadTextFile(filename, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function bindAdminReportControls(exported) {
+  document.getElementById("report-download-json")?.addEventListener("click", () => {
+    downloadTextFile("email-help-report.json", JSON.stringify(exported, null, 2), "application/json");
+  });
+  document.getElementById("report-download-csv")?.addEventListener("click", () => {
+    downloadTextFile("email-help-report.csv", exportedToCsv(exported), "text/csv");
+  });
+}
+
 function adminLiveAlertBar(rows) {
   const snapshot = adminLiveAlertSnapshot(rows);
   const hasUnread = snapshot.unread > 0;
@@ -2993,9 +3196,8 @@ async function loadAdmin(kind, content) {
 
     if (kind === "reports" || kind === "analytics") {
       const exported = await adminFetch("/api/admin/export");
-      content.innerHTML =
-        statHtml +
-        `<div class="card"><div class="card-body"><h3>${kind === "reports" ? "Reports" : "Analytics"}</h3><p>Export contains ${exported.leads.length} leads, ${exported.chats.length} AI chat records, ${exported.liveChats?.length || 0} live chats, and ${exported.visits.length} visits.</p><pre style="white-space:pre-wrap;max-height:360px;overflow:auto;background:var(--surface-soft);padding:14px;border-radius:8px">${escapeHtml(JSON.stringify(exported, null, 2))}</pre></div></div>`;
+      content.innerHTML = adminReportsPage(exported);
+      bindAdminReportControls(exported);
       return;
     }
 
