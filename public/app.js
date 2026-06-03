@@ -1567,25 +1567,32 @@ function adminLoginPage() {
 }
 
 function adminPage(kind) {
-  const labels = {
-    dashboard: "Dashboard",
-    live: "Live Chat Panel",
-    support: "Support Forms",
-    settings: "Settings",
-    reports: "Reports"
-  };
+  const labels = adminNavLabels();
   const active = kind === "chat" ? "live" : kind === "leads" ? "support" : labels[kind] ? kind : "dashboard";
   return `
-    <main id="main" class="page">
-      <section class="page-hero"><div class="container"><span class="badge">${icons.chart}Admin</span><h1>${labels[active]}</h1><p>Local admin area for submissions and chat records.</p><div class="page-actions"><button class="button secondary" id="admin-logout" type="button">Logout</button></div></div></section>
-      <section class="section">
+    <main id="main" class="page admin-page">
+      <header class="admin-mobile-topbar">
+        <button class="icon-btn admin-menu-toggle" id="admin-menu-toggle" type="button" aria-label="Open admin menu">${icons.menu}</button>
+        <div class="admin-mobile-brand"><span>${icons.shield}</span><strong>Admin</strong></div>
+        <button class="button secondary small" id="admin-logout-mobile" type="button">${icons.reply}Logout</button>
+      </header>
+      <section class="admin-hero">
+        <div class="container">
+          <div class="admin-hero-card">
+            <span class="admin-hero-icon">${icons.reply}<i></i></span>
+            <div><h1>${active === "dashboard" ? "Live Chat Panel" : labels[active]}</h1><p>${active === "dashboard" ? "Monitor chats, visitors & leads" : "Manage chats, visitors, forms, reports, and settings"}</p></div>
+          </div>
+        </div>
+      </section>
+      <section class="section admin-section">
         <div class="container admin-layout">
           <nav class="card admin-nav">
-            ${Object.keys(labels).map((key) => `<a class="${active === key ? "active" : ""}" href="/admin/${key}" data-link>${labels[key]}</a>`).join("")}
+            ${Object.keys(labels).map((key) => `<a class="${active === key ? "active" : ""}" href="${adminNavHref(key)}" data-link>${labels[key]}</a>`).join("")}
           </nav>
           <div id="admin-content"><div class="empty-state">Loading admin data...</div></div>
         </div>
       </section>
+      ${adminBottomNav(active)}
     </main>`;
 }
 
@@ -2335,13 +2342,20 @@ function bindAdminLogin() {
 function bindAdminPages() {
   const content = document.getElementById("admin-content");
   if (!content) return;
-  const kind = window.location.pathname.split("/")[2] || "dashboard";
+  const routeKind = window.location.pathname.split("/")[2] || "dashboard";
+  const kind = routeKind === "forms" ? "support" : routeKind;
 
-  const logout = document.getElementById("admin-logout");
-  if (logout) {
+  document.querySelectorAll("#admin-logout, #admin-logout-mobile").forEach((logout) => {
     logout.addEventListener("click", async () => {
       await fetch("/api/admin/logout", { method: "POST" });
       navigate("/admin/login");
+    });
+  });
+
+  const menuToggle = document.getElementById("admin-menu-toggle");
+  if (menuToggle) {
+    menuToggle.addEventListener("click", () => {
+      document.querySelector(".admin-nav")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2448,6 +2462,116 @@ function playAdminChatSound() {
   }
 }
 
+function adminNavLabels() {
+  return {
+    dashboard: "Dashboard",
+    live: "Live Chat",
+    support: "Forms",
+    reports: "Reports",
+    settings: "Settings"
+  };
+}
+
+function adminNavHref(key) {
+  return `/admin/${key === "support" ? "forms" : key}`;
+}
+
+function adminBottomNav(active) {
+  const labels = adminNavLabels();
+  const navIcons = {
+    dashboard: icons.mail,
+    live: icons.reply,
+    support: icons.inbox,
+    reports: icons.chart,
+    settings: icons.settings
+  };
+  return `
+    <nav class="admin-bottom-nav" aria-label="Admin mobile navigation">
+      ${Object.keys(labels)
+        .map((key) => `<a class="${active === key ? "active" : ""}" href="${adminNavHref(key)}" data-link>${navIcons[key]}<span>${labels[key]}</span></a>`)
+        .join("")}
+    </nav>`;
+}
+
+function adminStatCards(stats) {
+  const cards = [
+    ["Total Visits", stats.visits || 0, icons.mail, "blue"],
+    ["Live Open", stats.openLiveChats || 0, icons.reply, "green"],
+    ["Waiting", stats.waitingChats || 0, icons.chart, "orange"],
+    ["Missed", stats.missedChats || 0, icons.alert, "red"],
+    ["AI Chats", stats.chatMessages || 0, icons.bot, "purple"],
+    ["Leads", stats.leads || 0, icons.inbox, "teal"]
+  ];
+  return `
+    <div class="admin-stat-grid admin-stat-grid-modern">
+      ${cards
+        .map(
+          ([label, value, cardIcon, tone]) => `
+          <div class="admin-stat admin-stat-modern ${tone}">
+            <span class="admin-stat-icon">${cardIcon}</span>
+            <strong>${escapeHtml(value)}</strong>
+            <span>${label}</span>
+          </div>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function adminVisitorsSummary(rows) {
+  const visibleRows = rows.slice(0, 4);
+  return `
+    <section class="admin-mobile-card admin-visitors-summary">
+      <div class="admin-mobile-card-head">
+        <div><h2>Live Visitors</h2><p><span class="presence online"></span>${rows.length} session${rows.length === 1 ? "" : "s"}</p></div>
+        <a href="/admin/live" data-link>View All ${icons.external}</a>
+      </div>
+      <div class="admin-visitor-summary-list">
+        ${
+          visibleRows.length
+            ? visibleRows
+                .map((row, index) => {
+                  const visitorName = row.visitor?.name || "Anonymous Visitor";
+                  return `
+                  <a class="admin-visitor-row" href="/admin/live" data-link>
+                    <span class="presence ${row.online ? "online" : ""}"></span>
+                    <span class="admin-visitor-avatar tone-${(index % 4) + 1}">${icons.inbox}</span>
+                    <span class="admin-visitor-copy"><strong>${escapeHtml(visitorName)}</strong><small>${escapeHtml(messagePreview(row.lastMessage))}</small></span>
+                    <time>${lastActivityLabel(row.updatedAt)}</time>
+                    ${icons.external}
+                  </a>`;
+                })
+                .join("")
+            : `<div class="empty-state">No live chat sessions yet.</div>`
+        }
+      </div>
+    </section>`;
+}
+
+function adminQuickActions(stats) {
+  const actions = [
+    ["Open Chats", "/admin/live", icons.reply, stats.openLiveChats || 0],
+    ["Support Forms", "/admin/forms", icons.inbox, stats.leads || 0],
+    ["Reports", "/admin/reports", icons.chart, ""],
+    ["Settings", "/admin/settings", icons.settings, ""]
+  ];
+  return `
+    <section class="admin-mobile-card admin-quick-actions">
+      <h2>Quick Actions</h2>
+      <div class="admin-action-grid">
+        ${actions
+          .map(
+            ([label, href, actionIcon, count]) => `
+            <a class="admin-action-card" href="${href}" data-link>
+              <span>${actionIcon}</span>
+              ${count !== "" ? `<b>${escapeHtml(count)}</b>` : ""}
+              <strong>${label}</strong>
+            </a>`
+          )
+          .join("")}
+      </div>
+    </section>`;
+}
+
 function adminLiveAlertBar(rows) {
   const snapshot = adminLiveAlertSnapshot(rows);
   const hasUnread = snapshot.unread > 0;
@@ -2515,7 +2639,7 @@ function adminHelpSteps(type) {
     </div>`;
 }
 
-function bindAdminSoundControls() {
+function bindAdminSoundControls(kind = "live") {
   const button = document.getElementById("admin-sound-toggle");
   if (!button) return;
   button.addEventListener("click", async () => {
@@ -2530,14 +2654,14 @@ function bindAdminSoundControls() {
       playAdminChatSound();
     }
     const content = document.getElementById("admin-content");
-    if (content) loadAdmin("live", content);
+    if (content) loadAdmin(kind, content);
   });
 
   const refresh = document.getElementById("admin-live-refresh");
   if (refresh) {
     refresh.addEventListener("click", () => {
       const content = document.getElementById("admin-content");
-      if (content) loadAdmin("live", content);
+      if (content) loadAdmin(kind, content);
     });
   }
 }
@@ -2790,14 +2914,12 @@ async function loadAdminLiveThread(threadId, options = {}) {
 
 async function loadAdmin(kind, content) {
   try {
-      const stats = await adminFetch("/api/admin/stats");
-    const statHtml = `
-      <div class="admin-stat-grid">
-        <div class="admin-stat"><strong>${stats.stats.leads}</strong><span>Leads</span></div>
-        <div class="admin-stat"><strong>${stats.stats.chatMessages}</strong><span>AI Chats</span></div>
-        <div class="admin-stat"><strong>${stats.stats.openLiveChats || 0}</strong><span>Live Open</span></div>
-        <div class="admin-stat"><strong>${stats.stats.visits}</strong><span>Visits</span></div>
-      </div>`;
+    if (kind !== "live" && adminLivePollTimer) {
+      clearInterval(adminLivePollTimer);
+      adminLivePollTimer = null;
+    }
+    const stats = await adminFetch("/api/admin/stats");
+    const statHtml = adminStatCards(stats.stats);
 
     if (kind === "live") {
       const data = await adminFetch("/api/admin/live");
@@ -2810,7 +2932,7 @@ async function loadAdmin(kind, content) {
       adminLiveRowsSignature = adminRowsSignature(data.rows);
       document.title = snapshot.unread ? `(${snapshot.unread}) Email Admin` : "Email - Independent Email Guides & Free AI Tools";
       content.innerHTML = adminLiveMetricCards(stats.stats) + adminLiveAlertBar(data.rows) + adminLiveDashboard(data.rows, selectedId, stats.stats);
-      bindAdminSoundControls();
+      bindAdminSoundControls("live");
       bindAdminLiveInbox(content, selectedId);
       if (adminLivePollTimer) clearInterval(adminLivePollTimer);
       adminLivePollTimer = setInterval(() => {
@@ -2874,10 +2996,13 @@ async function loadAdmin(kind, content) {
       return;
     }
 
+    const liveData = await adminFetch("/api/admin/live");
     content.innerHTML =
       statHtml +
-      adminHelpSteps("dashboard") +
-      `<div class="grid three"><div class="card"><div class="card-body"><h3>Live Chat Panel</h3><p>Reply to visitors, enable sound alerts, and view bot-assisted conversations.</p><div class="page-actions"><a class="button secondary" href="/admin/live" data-link>Open Live Chat Panel</a></div></div></div><div class="card"><div class="card-body"><h3>Support Forms</h3><p>Public contact/support form submissions are stored in <code>data/submissions.json</code>.</p><div class="page-actions"><a class="button secondary" href="/admin/support" data-link>Open Support Forms</a></div></div></div><div class="card"><div class="card-body"><h3>Reports</h3><p>View export data for leads, chats, live sessions, and visits.</p><div class="page-actions"><a class="button secondary" href="/admin/reports" data-link>Open Reports</a></div></div></div></div>`;
+      adminLiveAlertBar(liveData.rows) +
+      adminVisitorsSummary(liveData.rows) +
+      adminQuickActions(stats.stats);
+    bindAdminSoundControls("dashboard");
   } catch (error) {
     content.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
   }
