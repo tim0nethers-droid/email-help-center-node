@@ -642,6 +642,11 @@ let adminLiveSnapshot = null;
 let adminLiveRowsSignature = "";
 let adminSoundEnabled = localStorage.getItem("ehc_admin_sound") === "true";
 let adminAudioContext = null;
+let adminAlertInterval = null;
+let adminAlertTimeout = null;
+let adminKnownUnreadVisitorIds = new Set();
+let adminAlertedUnreadVisitorIds = new Set();
+let adminLiveAlertBaselineReady = false;
 let visitorTypingTimer = null;
 let visitorTypingActive = false;
 let adminAgentTypingTimer = null;
@@ -661,6 +666,7 @@ function articleUrl(provider, topic) {
 }
 
 function navigate(path) {
+  if (!path.startsWith("/admin/live")) stopAdminLongAlert();
   window.history.pushState({}, "", path);
   mobileOpen = false;
   render();
@@ -676,7 +682,11 @@ document.addEventListener("click", (event) => {
   navigate(href);
 });
 
-window.addEventListener("popstate", render);
+window.addEventListener("popstate", () => {
+  if (window.location.pathname !== "/admin/live") stopAdminLongAlert();
+  render();
+});
+window.addEventListener("beforeunload", stopAdminLongAlert);
 
 function icon(name) {
   return `<span class="icon" aria-hidden="true">${icons[name] || icons.mail}</span>`;
@@ -2444,22 +2454,59 @@ function playAdminChatSound() {
     adminAudioContext = adminAudioContext || new AudioContextClass();
     if (adminAudioContext.state === "suspended") adminAudioContext.resume();
     const now = adminAudioContext.currentTime;
-    [0, 0.14].forEach((offset) => {
+    [0, 0.16, 0.34].forEach((offset, index) => {
       const oscillator = adminAudioContext.createOscillator();
       const gain = adminAudioContext.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, now + offset);
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(index === 1 ? 1040 : 820, now + offset);
       gain.gain.setValueAtTime(0.0001, now + offset);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.26, now + offset + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
       oscillator.connect(gain);
       gain.connect(adminAudioContext.destination);
       oscillator.start(now + offset);
-      oscillator.stop(now + offset + 0.13);
+      oscillator.stop(now + offset + 0.19);
     });
   } catch (error) {
     console.warn("Admin chat sound could not play", error);
   }
+}
+
+function stopAdminLongAlert() {
+  if (adminAlertInterval) clearInterval(adminAlertInterval);
+  if (adminAlertTimeout) clearTimeout(adminAlertTimeout);
+  adminAlertInterval = null;
+  adminAlertTimeout = null;
+}
+
+function startAdminLongAlert() {
+  if (!adminSoundEnabled) return;
+  stopAdminLongAlert();
+  playAdminChatSound();
+  adminAlertInterval = setInterval(playAdminChatSound, 2500);
+  adminAlertTimeout = setTimeout(stopAdminLongAlert, 60000);
+}
+
+function unreadVisitorIds(rows) {
+  return rows.flatMap((row) => row.unreadVisitorMessageIds || []);
+}
+
+function updateAdminSoundAlerts(rows, { initialize = false } = {}) {
+  const ids = unreadVisitorIds(rows);
+  if (initialize || !adminLiveAlertBaselineReady) {
+    adminKnownUnreadVisitorIds = new Set(ids);
+    adminAlertedUnreadVisitorIds = new Set(ids);
+    adminLiveAlertBaselineReady = true;
+    return;
+  }
+  const newIds = ids.filter((id) => !adminKnownUnreadVisitorIds.has(id) && !adminAlertedUnreadVisitorIds.has(id));
+  adminKnownUnreadVisitorIds = new Set(ids);
+  if (!newIds.length) {
+    if (!ids.length) stopAdminLongAlert();
+    return;
+  }
+  newIds.forEach((id) => adminAlertedUnreadVisitorIds.add(id));
+  startAdminLongAlert();
 }
 
 function adminNavLabels() {
@@ -2787,7 +2834,7 @@ function adminLiveAlertBar(rows) {
       <div class="admin-live-alert-actions">
         <button class="button secondary" id="admin-live-refresh" type="button">Refresh Chats</button>
         <button class="button ${adminSoundEnabled ? "secondary" : ""}" id="admin-sound-toggle" type="button">
-          ${adminSoundEnabled ? "Sound On" : "Enable Sound"}
+          ${adminSoundEnabled ? "Sound Off" : "Sound On"}
         </button>
       </div>
     </div>`;
@@ -2855,6 +2902,8 @@ function bindAdminSoundControls(kind = "live") {
         if (adminAudioContext.state === "suspended") await adminAudioContext.resume();
       }
       playAdminChatSound();
+    } else {
+      stopAdminLongAlert();
     }
     const content = document.getElementById("admin-content");
     if (content) loadAdmin(kind, content);
@@ -2863,6 +2912,7 @@ function bindAdminSoundControls(kind = "live") {
   const refresh = document.getElementById("admin-live-refresh");
   if (refresh) {
     refresh.addEventListener("click", () => {
+      stopAdminLongAlert();
       const content = document.getElementById("admin-content");
       if (content) loadAdmin(kind, content);
     });
@@ -2873,9 +2923,7 @@ async function pollAdminLiveAlerts() {
   try {
     const data = await adminFetch("/api/admin/live");
     const snapshot = adminLiveAlertSnapshot(data.rows);
-    if (adminLiveSnapshot && snapshot.unread > adminLiveSnapshot.unread && snapshot.latest !== adminLiveSnapshot.latest) {
-      playAdminChatSound();
-    }
+    updateAdminSoundAlerts(data.rows);
     adminLiveSnapshot = snapshot;
     document.title = snapshot.unread ? `(${snapshot.unread}) Email Admin` : "Email - Independent Email Guides & Free AI Tools";
     const alert = document.querySelector(".admin-live-alert");
@@ -2904,9 +2952,7 @@ async function pollAdminLiveRealtime(content) {
   try {
     const [stats, data] = await Promise.all([adminFetch("/api/admin/stats"), adminFetch("/api/admin/live")]);
     const snapshot = adminLiveAlertSnapshot(data.rows);
-    if (adminLiveSnapshot && snapshot.unread > adminLiveSnapshot.unread && snapshot.latest !== adminLiveSnapshot.latest) {
-      playAdminChatSound();
-    }
+    updateAdminSoundAlerts(data.rows);
     adminLiveSnapshot = snapshot;
     document.title = snapshot.unread ? `(${snapshot.unread}) Email Admin` : "Email - Independent Email Guides & Free AI Tools";
 
@@ -2918,7 +2964,7 @@ async function pollAdminLiveRealtime(content) {
       const keepFocus = document.activeElement === draftInput;
       content.innerHTML = adminLiveMetricCards(stats.stats) + adminLiveAlertBar(data.rows) + adminLiveDashboard(data.rows, selectedId, stats.stats);
       adminLiveRowsSignature = nextSignature;
-      bindAdminSoundControls();
+      bindAdminSoundControls("live");
       bindAdminLiveInbox(content, selectedId, { draft, keepFocus });
       return;
     }
@@ -3002,11 +3048,15 @@ function bindAdminLiveInbox(content, selectedId, options = {}) {
 
   const inlineRefresh = document.getElementById("admin-live-refresh-inline");
   if (inlineRefresh) {
-    inlineRefresh.addEventListener("click", () => loadAdmin("live", content));
+    inlineRefresh.addEventListener("click", () => {
+      stopAdminLongAlert();
+      loadAdmin("live", content);
+    });
   }
 }
 
 async function loadAdminLiveThread(threadId, options = {}) {
+  stopAdminLongAlert();
   const target = document.getElementById("admin-live-conversation");
   const details = document.getElementById("admin-live-details");
   const subtitle = document.getElementById("admin-live-chat-subtitle");
@@ -3120,6 +3170,7 @@ async function loadAdmin(kind, content) {
     if (kind !== "live" && adminLivePollTimer) {
       clearInterval(adminLivePollTimer);
       adminLivePollTimer = null;
+      stopAdminLongAlert();
     }
     const stats = await adminFetch("/api/admin/stats");
     const statHtml = adminStatCards(stats.stats);
@@ -3132,6 +3183,7 @@ async function loadAdmin(kind, content) {
         playAdminChatSound();
       }
       adminLiveSnapshot = snapshot;
+      updateAdminSoundAlerts(data.rows, { initialize: true });
       adminLiveRowsSignature = adminRowsSignature(data.rows);
       document.title = snapshot.unread ? `(${snapshot.unread}) Email Admin` : "Email - Independent Email Guides & Free AI Tools";
       content.innerHTML = adminLiveMetricCards(stats.stats) + adminLiveAlertBar(data.rows) + adminLiveDashboard(data.rows, selectedId, stats.stats);
@@ -3139,7 +3191,10 @@ async function loadAdmin(kind, content) {
       bindAdminLiveInbox(content, selectedId);
       if (adminLivePollTimer) clearInterval(adminLivePollTimer);
       adminLivePollTimer = setInterval(() => {
-        if (window.location.pathname !== "/admin/live") return;
+        if (window.location.pathname !== "/admin/live") {
+          stopAdminLongAlert();
+          return;
+        }
         pollAdminLiveRealtime(content);
       }, 2000);
       return;

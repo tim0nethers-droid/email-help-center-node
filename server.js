@@ -353,6 +353,7 @@ function liveChatSummary(thread) {
   const lastMessage = messages[messages.length - 1] || null;
   const visitorMessages = messages.filter((message) => message.from === "visitor");
   const agentMessages = messages.filter((message) => message.from === "agent" && message.name !== "Email Bot");
+  const unreadVisitorMessages = messages.filter((message) => message.from === "visitor" && !message.readByAdmin);
   return {
     id: thread.id,
     ticketId: thread.ticketId,
@@ -367,7 +368,8 @@ function liveChatSummary(thread) {
     messageCount: messages.length,
     visitorMessageCount: visitorMessages.length,
     agentMessageCount: agentMessages.length,
-    unread: messages.filter((message) => message.from === "visitor" && !message.readByAdmin).length,
+    unread: unreadVisitorMessages.length,
+    unreadVisitorMessageIds: unreadVisitorMessages.map((message) => message.id),
     lastMessage,
     typing: typingSnapshot(thread.id)
   };
