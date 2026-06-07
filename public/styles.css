@@ -909,6 +909,159 @@ textarea::placeholder {
   background: linear-gradient(180deg, #eff6ff, #ffffff);
 }
 
+.gmail-page {
+  background: #f8fafc;
+}
+
+.gmail-hero {
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 80% 10%, rgba(124, 58, 237, 0.13), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, #f4f7ff 58%, #eef2ff 100%);
+  padding: 64px 0 46px;
+}
+
+.gmail-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) 390px;
+  gap: 28px;
+  align-items: center;
+}
+
+.gmail-hero h1 {
+  margin: 18px 0 12px;
+  color: #0f172a;
+  font-size: clamp(2.45rem, 5vw, 4rem);
+  line-height: 1.04;
+}
+
+.gmail-hero-subtitle {
+  max-width: 720px;
+  margin: 0 0 18px;
+  color: #334155;
+  font-size: 1.18rem;
+  line-height: 1.65;
+}
+
+.gmail-disclaimer {
+  max-width: 760px;
+}
+
+.gmail-provider-card,
+.gmail-guide-card {
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.gmail-provider-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.gmail-provider-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.65rem;
+}
+
+.gmail-provider-card p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.gmail-logo-wrap .provider-logo,
+.gmail-logo-wrap {
+  width: 64px;
+  height: 64px;
+}
+
+.gmail-logo-wrap .provider-logo img {
+  width: 46px;
+  height: 46px;
+}
+
+.gmail-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.gmail-guide-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 242px;
+  padding: 18px;
+}
+
+.gmail-guide-card .icon {
+  width: 46px;
+  height: 46px;
+  background: #eef2ff;
+  color: #1d4ed8;
+}
+
+.gmail-guide-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.gmail-guide-card p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.gmail-guide-card .button {
+  align-self: end;
+  margin-top: auto;
+}
+
+.gmail-form-section {
+  background: #ffffff;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.gmail-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.gmail-form-grid h2 {
+  margin: 0 0 12px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.08;
+}
+
+.gmail-form-grid p {
+  color: #475569;
+  line-height: 1.65;
+}
+
+.gmail-form-card {
+  border-radius: 18px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.gmail-footer-disclaimer {
+  margin-top: 18px;
+}
+
+.gmail-faq-section {
+  background: #f8fafc;
+}
+
+.gmail-faq-list {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
 .server-table,
 .data-table {
   width: 100%;
@@ -2355,6 +2508,15 @@ textarea::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .gmail-hero-grid,
+  .gmail-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gmail-guide-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .admin-nav {
     position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2471,6 +2633,32 @@ textarea::placeholder {
 
   .provider-card {
     grid-template-columns: 46px minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .gmail-hero {
+    padding: 42px 0 34px;
+  }
+
+  .gmail-hero h1 {
+    font-size: 2.18rem;
+  }
+
+  .gmail-hero-subtitle {
+    font-size: 1rem;
+  }
+
+  .gmail-provider-card,
+  .gmail-guide-card,
+  .gmail-form-card {
+    border-radius: 14px;
+  }
+
+  .gmail-guide-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gmail-guide-card {
     min-height: auto;
   }
 

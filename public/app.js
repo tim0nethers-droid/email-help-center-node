@@ -1156,7 +1156,125 @@ function providersPage() {
     </main>`;
 }
 
+function gmailProviderPage(provider) {
+  const gmailGuides = [
+    ["Gmail setup guide", "Set up Gmail on web, desktop mail apps, and common devices with safe settings.", "settings"],
+    ["Reset Gmail password", "Learn the usual steps for password reset and account recovery pages.", "lock"],
+    ["Gmail not receiving emails", "Check spam, filters, forwarding, storage, blocked senders, and delivery delays.", "inbox"],
+    ["Gmail account security tips", "Review sign-in activity, recovery info, app passwords, and 2-step verification.", "shield"],
+    ["Gmail mobile setup", "Add Gmail to Android, iPhone, and mail apps while avoiding unsafe shortcuts.", "phone"],
+    ["Gmail storage full", "Find large messages, clean attachments, and understand Google storage basics.", "trash"],
+    ["Gmail forwarding setup", "Review forwarding, filters, POP/IMAP, and inbox organization options.", "reply"],
+    ["Gmail attachment issues", "Fix common upload, download, file size, and blocked attachment problems.", "paperclip"]
+  ];
+  const faqRows = [
+    ["Why is my Gmail not receiving emails?", "Common causes include spam placement, filters, forwarding rules, blocked senders, storage limits, or temporary delivery delays."],
+    ["How do I reset my Gmail password?", "Use Google's account recovery page from a trusted browser and verify the recovery email or phone already on the account."],
+    ["How do I set up Gmail on my phone?", "Use the Gmail app when possible. For another mail app, check IMAP/SMTP settings and app-password requirements if 2-step verification is enabled."],
+    ["What should I do if my Gmail storage is full?", "Review large messages and attachments, empty trash/spam after checking them, and confirm how Google storage is shared across services."],
+    ["Is this official Gmail support?", "No. This website provides independent educational guides only and is not affiliated with Google or Gmail."]
+  ];
+  return `
+    <main id="main" class="page gmail-page">
+      <section class="gmail-hero">
+        <div class="container gmail-hero-grid">
+          <div>
+            <span class="badge">${icons.shield}Independent Email Guide</span>
+            <h1>Gmail Help Guides</h1>
+            <p class="gmail-hero-subtitle">Find simple Gmail setup, inbox, password, mobile, and troubleshooting guides.</p>
+            <div class="notice info gmail-disclaimer">We are an independent educational resource and are not affiliated with Google or Gmail.</div>
+            <div class="page-actions">
+              <button class="button" type="button" data-gmail-help>Get Gmail Help</button>
+              <a class="button secondary" href="/providers" data-link>All Providers</a>
+            </div>
+          </div>
+          <aside class="gmail-provider-card">
+            <span class="gmail-logo-wrap">${logo(provider)}</span>
+            <div>
+              <p class="section-kicker">Provider</p>
+              <h2>Google Mail / Gmail</h2>
+              <p>Independent tutorials for Gmail setup, inbox delivery, account safety, mobile access, storage, and attachment troubleshooting.</p>
+            </div>
+            <button class="button full" type="button" data-gmail-help>Get Gmail Help</button>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section gmail-guides-section">
+        <div class="container">
+          <div class="section-heading align-left">
+            <p class="section-kicker">Gmail learning center</p>
+            <h2>Popular Gmail troubleshooting guides</h2>
+            <p>Choose a topic below, then submit a request if you need help organizing your next steps.</p>
+          </div>
+          <div class="gmail-guide-grid">
+            ${gmailGuides
+              .map(
+                ([title, desc, iconName]) => `
+                <article class="gmail-guide-card">
+                  ${icon(iconName)}
+                  <h3>${title}</h3>
+                  <p>${desc}</p>
+                  <button class="button secondary small" type="button" data-gmail-help>Read guide</button>
+                </article>`
+              )
+              .join("")}
+          </div>
+        </div>
+      </section>
+
+      <section class="section gmail-form-section" id="gmail-support-form">
+        <div class="container gmail-form-grid">
+          <div>
+            <p class="section-kicker">Request help</p>
+            <h2>Submit a Gmail guide request</h2>
+            <p>Share the basic issue and an admin can review it from Support Forms. Do not include passwords, OTPs, recovery codes, or private mailbox content.</p>
+            <div class="notice gmail-footer-disclaimer">This website provides independent educational guides only. It is not affiliated with, endorsed by, or connected to Google, Gmail, or Alphabet Inc.</div>
+          </div>
+          <div class="card gmail-form-card"><div class="card-body">
+            <form class="form provider-ticket-form" data-provider-name="Gmail">
+              <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
+              <input type="hidden" name="subject" value="Gmail educational help request">
+              <div class="form-row">
+                <div class="field"><label>Full name</label><input name="name" required placeholder="Your full name"></div>
+                <div class="field"><label>Email address</label><input name="email" type="email" required placeholder="you@example.com"></div>
+              </div>
+              <div class="form-row">
+                <div class="field"><label>Phone number</label><input name="phone" inputmode="tel" placeholder="Phone number"></div>
+                <div class="field"><label>Problem type</label><select name="category" required><option value="">Select problem type</option><option>Gmail setup tutorial</option><option>Gmail password guidance</option><option>Gmail not receiving emails</option><option>Gmail mobile setup</option><option>Gmail storage full</option><option>Gmail attachment issues</option><option>Gmail security tips</option></select></div>
+              </div>
+              <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the Gmail issue. Do not include passwords, OTPs, or recovery codes."></textarea></div>
+              <button class="button" type="submit">${icons.reply}Submit Request</button>
+            </form>
+            <div class="provider-ticket-status" style="margin-top:16px"></div>
+          </div></div>
+        </div>
+      </section>
+
+      <section class="section gmail-faq-section">
+        <div class="container">
+          <div class="section-heading">
+            <p class="section-kicker">FAQ</p>
+            <h2>Gmail guide questions</h2>
+          </div>
+          <div class="faq-list gmail-faq-list">
+            ${faqRows
+              .map(
+                ([question, answer]) => `
+                <div class="faq-item">
+                  <button class="faq-toggle" type="button">${question}</button>
+                  <div class="answer">${answer}</div>
+                </div>`
+              )
+              .join("")}
+          </div>
+        </div>
+      </section>
+    </main>`;
+}
+
 function providerPage(provider) {
+  if (provider.id === "gmail") return gmailProviderPage(provider);
   const quickLinks = ["Login & Password", "Account Setup", "Sending/Receiving", "Security & Spam", "Account Recovery"];
   const visibleTopics = topics.slice(0, 16);
   return `
@@ -1816,6 +1934,12 @@ function bindProviderTools() {
       } catch (error) {
         status.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
       }
+    });
+  });
+
+  document.querySelectorAll("[data-gmail-help]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.getElementById("gmail-support-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 }
