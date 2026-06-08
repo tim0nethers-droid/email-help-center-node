@@ -1013,10 +1013,10 @@ function liveChatWidget() {
   if (provider) {
     return `
       <div class="live-chat-widget provider-ai-chat-widget" id="live-chat-widget">
-        <button class="provider-floating-chat-button" type="button" data-provider-scroll-form aria-label="Open ${escapeHtml(provider.name)} chat">
+        <a class="provider-floating-chat-button" href="${providerChatUrl(provider)}" data-link aria-label="Open ${escapeHtml(provider.name)} chat">
           ${icons.bot}
           <span class="provider-floating-badge">1</span>
-        </button>
+        </a>
       </div>`;
   }
   const isOpen = localStorage.getItem("ehc_live_chat_open") === "true";
@@ -1302,7 +1302,7 @@ function providerPage(provider) {
                     <h2>Need help faster? Chat with our team</h2>
                     <p>Get guidance from our independent support assistant.</p>
                   </div>
-                  <button class="button provider-red-button" type="button" data-provider-scroll-form>Start Chat Now</button>
+                  <a class="button provider-red-button" href="${providerChatUrl(provider)}" data-link>Start Chat Now</a>
                 </div>
                 <div class="notice info">Or select your issue below for step-by-step guidance.</div>
                 <div class="card provider-troubleshooting-card"><div class="card-body">
@@ -1376,7 +1376,7 @@ function providerPage(provider) {
               <h3>Need Help Now?</h3>
               <p class="section-kicker">Get instant assistance</p>
               <p>Chat with our AI-powered support assistant for immediate help with your ${safeName} issues.</p>
-              <button class="button full provider-red-button" type="button" data-provider-scroll-form>Start Live Chat</button>
+              <a class="button full provider-red-button" href="${providerChatUrl(provider)}" data-link>Start Live Chat</a>
               <small>Instant &bull; Free &bull; Independent resource, not affiliated with ${safeName}</small>
             </div></div>
             <div class="card"><div class="card-body">
@@ -1983,8 +1983,11 @@ function bindProviderTools() {
       button.addEventListener("click", () => {
         const target = button.dataset.providerTab;
         setProviderTab(tabs, target);
+        const panel = tabs.querySelector(`[data-provider-panel="${target}"]`);
         if (target === "ticket") {
           document.getElementById("provider-support-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          (panel || tabs).scrollIntoView({ behavior: "smooth", block: "start" });
         }
       });
     });
