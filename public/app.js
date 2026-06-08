@@ -2301,15 +2301,60 @@ function bindChat() {
         ]
       };
       history = [
-        { role: "bot", text: chatInitialMessage(providerName, lead) },
         { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
         { role: "bot", text: chatFollowupMessage(providerName, lead) }
       ];
       persist();
-      draw();
-      window.scrollTo({ top: 0, behavior: "auto" });
-      render();
-    });
+      const liveHtml = `
+        <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(lead.issue || issue || "")}" data-chat-started="true">
+          <section class="section ai-chat-section">
+            <div class="container ai-chat-start-shell ai-chat-transition-shell">
+              <div class="card ai-chat-start-card ai-chat-live-card">
+                <div class="card-body">
+                  <div class="ai-chat-live-topbar">
+                    <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
+                    <div class="ai-chat-live-brand">
+                      <div class="ai-chat-live-icon">${providerLogo ? `<img src="${escapeHtml(providerLogo)}" alt="${escapeHtml(chatProvider.name)}">` : icons.bot}</div>
+                      <div>
+                        <strong>${escapeHtml(chatProvider.name)} Help</strong>
+                        <span>Independent</span>
+                        <small><i></i> Online &bull; ${escapeHtml(lead.name || "Visitor")}</small>
+                      </div>
+                    </div>
+                    <div class="ai-chat-live-status"><i></i> Online</div>
+                  </div>
+                  <div id="chat-window" class="chat-window ai-chat-window"></div>
+                  <div class="quick-reply-row quick-replies">
+                    ${quickReplies
+                      .map((prompt) =>
+                        `<button class="quick-reply-btn quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${prompt === "Request Callback" ? `${icons.phone}<span>${escapeHtml(prompt)}</span>` : escapeHtml(prompt)}</button>`
+                      )
+                      .join("")}
+                  </div>
+                  <form class="chat-form" id="chat-form">
+                    <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
+                    <button class="button" type="submit">${icons.reply}Send</button>
+                  </form>
+                  <div class="ai-chat-note">AI assistant online &bull; Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>`;
+      document.getElementById("app").innerHTML = `${header()}${liveHtml}${universalSupportBand()}${footer()}`;
+      bindGlobalEvents();
+      bindPageEvents();
+      const liveWindow = document.getElementById("chat-window");
+      if (liveWindow) {
+        liveWindow.innerHTML = history
+          .map(
+            (message) =>
+              `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
+          )
+          .join("");
+        liveWindow.scrollTop = liveWindow.scrollHeight;
+      }
+      });
     return;
   }
 
