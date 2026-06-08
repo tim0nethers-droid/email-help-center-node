@@ -2217,6 +2217,7 @@ function bindChat() {
   const issue = page?.dataset.chatIssue || "";
   const chatProvider = chatProviderFromQuery() || { id: "gmail", name: providerName, slug: "gmail.com" };
   const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
+  const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
   const providerDomain = providerChatDomain(chatProviderFromQuery()) || "gmail.com";
   const stateKey = chatStateKey(providerDomain);
   const initialState = readLocalJson(stateKey, { started: false, leadData: null, messages: [], sessionId: "" });
