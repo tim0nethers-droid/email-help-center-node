@@ -1634,33 +1634,35 @@ function chatPage() {
     ? `
     <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(leadData.issue || issue || "")}" data-chat-started="true">
       <section class="section ai-chat-section">
-        <div class="container ai-chat-live-shell">
-          <div class="ai-chat-live-topbar">
-            <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
-            <div class="ai-chat-live-brand">
-              <div class="ai-chat-live-icon">${providerLogo ? `<img src="${escapeHtml(providerLogo)}" alt="${escapeHtml(chatProvider.name)}">` : icons.bot}</div>
-              <div>
-                <strong>${escapeHtml(chatProvider.name)} Help</strong>
-                <span>Independent</span>
-                <small><i></i> Online - ${escapeHtml(leadData.name || "Visitor")}</small>
+        <div class="container ai-chat-start-shell ai-chat-transition-shell">
+          <div class="card ai-chat-start-card ai-chat-live-card">
+            <div class="card-body">
+              <div class="ai-chat-live-topbar">
+                <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
+                <div class="ai-chat-live-brand">
+                  <div class="ai-chat-live-icon">${providerLogo ? `<img src="${escapeHtml(providerLogo)}" alt="${escapeHtml(chatProvider.name)}">` : icons.bot}</div>
+                  <div>
+                    <strong>${escapeHtml(chatProvider.name)} Help</strong>
+                    <span>Independent</span>
+                    <small><i></i> Online &bull; ${escapeHtml(leadData.name || "Visitor")}</small>
+                  </div>
+                </div>
+                <div class="ai-chat-live-status"><i></i> Online</div>
               </div>
+              <div id="chat-window" class="chat-window ai-chat-window"></div>
+              <div class="quick-reply-row quick-replies">
+                ${quickReplies
+                  .map((prompt) =>
+                    `<button class="quick-reply-btn quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${prompt === "Request Callback" ? `${icons.phone}<span>${escapeHtml(prompt)}</span>` : escapeHtml(prompt)}</button>`
+                  )
+                  .join("")}
+              </div>
+              <form class="chat-form" id="chat-form">
+                <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
+                <button class="button" type="submit">${icons.reply}Send</button>
+              </form>
+              <div class="ai-chat-note">AI assistant online &bull; Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
             </div>
-            <div class="ai-chat-live-status"><i></i> Online</div>
-          </div>
-          <div class="card ai-chat-card">
-            <div id="chat-window" class="chat-window ai-chat-window"></div>
-            <div class="quick-reply-row quick-replies">
-              ${quickReplies
-                .map((prompt) =>
-                  `<button class="quick-reply-btn quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${prompt === "Request Callback" ? `${icons.phone}<span>${escapeHtml(prompt)}</span>` : escapeHtml(prompt)}</button>`
-                )
-                .join("")}
-            </div>
-            <form class="chat-form" id="chat-form">
-              <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
-              <button class="button" type="submit">${icons.reply}Send</button>
-            </form>
-            <div class="ai-chat-note">AI assistant online - Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
           </div>
         </div>
       </section>

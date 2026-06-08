@@ -1510,6 +1510,18 @@ textarea::placeholder {
   justify-content: center;
 }
 
+.ai-chat-transition-shell {
+  grid-template-columns: minmax(0, 420px);
+}
+
+.ai-chat-live-card {
+  border: 1px solid #dbeafe;
+  border-top: 4px solid #ef4444;
+  overflow: hidden;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #fff7f7 0%, #ffffff 36%);
+}
+
 .ai-chat-live-topbar {
   display: grid;
   grid-template-columns: auto 1fr auto;
