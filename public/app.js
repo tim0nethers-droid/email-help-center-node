@@ -16,6 +16,7 @@ const icons = {
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>'
+  , user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>'
 };
 
 const translations = {
@@ -1912,7 +1913,30 @@ function adminLoginPage() {
 
 function adminPage(kind) {
   const labels = adminNavLabels();
-  const active = kind === "chat" ? "live" : kind === "leads" ? "support" : labels[kind] ? kind : "dashboard";
+  const activeKinds = new Set(["dashboard", "live", "support", "reports", "settings", "contacts", "monitoring", "dm", "profile"]);
+  const active = kind === "chat" ? "live" : kind === "leads" ? "support" : activeKinds.has(kind) ? kind : "dashboard";
+  const pageTitles = {
+    dashboard: "Live Chat Panel",
+    live: "Inbox",
+    support: "Forms",
+    reports: "Reports",
+    settings: "Settings",
+    contacts: "Contacts",
+    monitoring: "Monitoring",
+    dm: "DM",
+    profile: "You"
+  };
+  const pageSubtitles = {
+    dashboard: "Monitor chats, visitors & leads",
+    live: "Browse live conversations and jump into a thread",
+    support: "Manage chats, visitors, forms, reports, and settings",
+    reports: "Review visits, chats, and leads",
+    settings: "Configure admin preferences",
+    contacts: "Saved contacts and visitor profiles",
+    monitoring: "Live monitoring and alerts",
+    dm: "Direct messages and quick replies",
+    profile: "Admin profile and account settings"
+  };
   return `
     <main id="main" class="page admin-page">
       <header class="admin-mobile-topbar">
@@ -1924,7 +1948,7 @@ function adminPage(kind) {
         <div class="container">
           <div class="admin-hero-card">
             <span class="admin-hero-icon">${icons.reply}<i></i></span>
-            <div><h1>${active === "dashboard" ? "Live Chat Panel" : labels[active]}</h1><p>${active === "dashboard" ? "Monitor chats, visitors & leads" : "Manage chats, visitors, forms, reports, and settings"}</p></div>
+            <div><h1>${pageTitles[active] || labels[active] || "Admin"}</h1><p>${pageSubtitles[active] || "Manage chats, visitors, forms, reports, and settings"}</p></div>
           </div>
         </div>
       </section>
@@ -1992,6 +2016,10 @@ function routeContent() {
   if (path === "/admin/chat") return adminPage("live");
   if (path === "/admin/leads") return adminPage("support");
   if (path === "/admin/forms") return adminPage("support");
+  if (path === "/admin/contacts") return adminPage("contacts");
+  if (path === "/admin/monitoring") return adminPage("monitoring");
+  if (path === "/admin/dm") return adminPage("dm");
+  if (path === "/admin/profile") return adminPage("profile");
   if (path.startsWith("/admin/")) return adminPage(parts[1]);
   if (path === "/search") return searchPage(url.searchParams.get("q") || "");
   if (parts[0] === "provider" && parts[1]) {
@@ -3061,20 +3089,69 @@ function adminNavHref(key) {
 }
 
 function adminBottomNav(active) {
-  const labels = adminNavLabels();
   const navIcons = {
-    dashboard: icons.mail,
-    live: icons.reply,
-    support: icons.inbox,
-    reports: icons.chart,
-    settings: icons.settings
+    inbox: icons.mail,
+    contacts: icons.inbox,
+    monitoring: icons.chart,
+    dm: icons.reply,
+    you: icons.user
   };
+  const tabs = [
+    ["inbox", "Inbox", "/admin/live"],
+    ["contacts", "Contacts", "/admin/contacts"],
+    ["monitoring", "Monitoring", "/admin/monitoring"],
+    ["dm", "DM", "/admin/dm"],
+    ["you", "You", "/admin/profile"]
+  ];
   return `
     <nav class="admin-bottom-nav" aria-label="Admin mobile navigation">
-      ${Object.keys(labels)
-        .map((key) => `<a class="${active === key ? "active" : ""}" href="${adminNavHref(key)}" data-link>${navIcons[key]}<span>${labels[key]}</span></a>`)
+      ${tabs
+        .map(([key, label, href]) => `<a class="${active === key || (active === "live" && key === "inbox") ? "active" : ""}" href="${href}" data-link>${navIcons[key]}<span>${label}</span></a>`)
         .join("")}
     </nav>`;
+}
+
+function adminChatList(rows, selectedId) {
+  return `
+    <section class="admin-chat-list-shell ${rows.length ? "" : "empty"}">
+      <div class="admin-chat-list-head">
+        <div>
+          <h2>Inbox</h2>
+          <p>${rows.length} active thread${rows.length === 1 ? "" : "s"}</p>
+        </div>
+      </div>
+      <div class="admin-chat-list">
+        ${
+          rows.length
+            ? rows
+                .map((row, index) => {
+                  const visitorName = row.visitor?.name || `Visitor ${String(row.ticketId || row.id).slice(-6)}`;
+                  const statusClass = row.status === "closed" ? "closed" : "open";
+                  const initials = (visitorName || "V")
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((part) => part[0] || "")
+                    .join("")
+                    .toUpperCase();
+                  return `
+                    <button class="admin-chat-list-item ${row.id === selectedId ? "active" : ""}" type="button" data-live-thread="${row.id}">
+                      <span class="admin-chat-avatar tone-${(index % 4) + 1}">${escapeHtml(initials || "V")}</span>
+                      <span class="admin-chat-copy">
+                        <strong>${escapeHtml(visitorName)}</strong>
+                        <small>${escapeHtml(messagePreview(row.lastMessage))}</small>
+                        <span class="admin-chat-meta">
+                          <span class="status-pill ${statusClass}">${escapeHtml(row.status || "open")}</span>
+                          <time>${lastActivityLabel(row.updatedAt)}</time>
+                        </span>
+                      </span>
+                      <span class="admin-chat-chevron">${icons.chevron}</span>
+                    </button>`;
+                })
+                .join("")
+            : `<div class="empty-state">No live chat sessions yet.</div>`
+        }
+      </div>
+    </section>`;
 }
 
 function adminStatCards(stats) {
@@ -3515,49 +3592,31 @@ async function pollAdminLiveRealtime(content) {
 
 function adminLiveDashboard(rows, selectedId, stats = {}) {
   if (!rows.length) {
-    const visitorText = stats.visits
-      ? "No chat messages yet. Visits are being tracked, but no visitor has opened Live Chat."
-      : "No live chat sessions yet.";
     return `
-      <div class="admin-live-console empty">
-        <div class="admin-live-column"><div class="admin-live-column-head"><h3>Visitors</h3></div><div class="empty-state">${visitorText}</div></div>
-        <div class="admin-live-column"><div class="admin-live-column-head"><h3>Conversation</h3></div><div class="empty-state">Visitor messages will appear here after someone starts Live Chat.</div></div>
-        <div class="admin-live-column"><div class="admin-live-column-head"><h3>Details</h3></div><div class="empty-state">Select a visitor to view details.</div></div>
+      <div class="admin-live-shell chat-list-visible">
+        ${adminChatList(rows, selectedId)}
+        <div class="admin-live-empty-state">
+          <div class="empty-state">Visitor messages will appear here after someone starts Live Chat.</div>
+        </div>
       </div>`;
   }
 
   return `
-    <div class="admin-live-console">
-      <aside class="admin-live-column admin-live-sessions">
-        <div class="admin-live-column-head">
-          <div><h3>Live Visitors</h3><p>${rows.length} session${rows.length === 1 ? "" : "s"}</p></div>
+    <div class="admin-live-shell chat-list-visible${selectedId ? " chat-thread-visible" : ""}">
+      ${adminChatList(rows, selectedId)}
+      <section class="admin-live-thread-shell admin-live-column admin-live-chatpane">
+        <div class="admin-live-column-head admin-live-thread-head">
+          <button class="icon-btn admin-live-back" id="admin-live-back" type="button" aria-label="Back to inbox">${icons.chevron}</button>
+          <div>
+            <h3>Conversation</h3>
+            <p id="admin-live-chat-subtitle">Select a visitor</p>
+          </div>
+          <button class="icon-btn" id="admin-live-more" type="button" aria-label="More options">${icons.menu}</button>
         </div>
-        <div class="admin-live-list">
-          ${rows
-            .map((row) => {
-              const visitorName = row.visitor?.name || `Visitor ${String(row.ticketId || row.id).slice(-6)}`;
-              return `
-              <button class="admin-live-item ${row.id === selectedId ? "active" : ""}" type="button" data-live-thread="${row.id}">
-                <span class="presence ${row.online ? "online" : ""}"></span>
-                <span class="session-main">
-                  <strong>${escapeHtml(visitorName)}</strong>
-                  <small>${escapeHtml(row.currentPage || "Unknown page")}</small>
-                  <small>${escapeHtml(messagePreview(row.lastMessage))}</small>
-                  <small class="typing-mini ${row.typing?.visitorTyping ? "show" : ""}">typing...</small>
-                </span>
-                <span class="session-meta">
-                  ${row.unread ? `<b>${row.unread}</b>` : ""}
-                  <small>${lastActivityLabel(row.updatedAt)}</small>
-                </span>
-              </button>`;
-            })
-            .join("")}
-        </div>
-      </aside>
-      <section class="admin-live-column admin-live-chatpane">
-        <div class="admin-live-column-head">
-          <div><h3>Conversation</h3><p id="admin-live-chat-subtitle">Select a visitor</p></div>
-          <button class="button secondary small" id="admin-live-refresh-inline" type="button">Refresh</button>
+        <div class="admin-live-thread-toolbar">
+          <button class="button secondary small" type="button" data-admin-live-action="ticket">${icons.inbox}<span>New ticket</span></button>
+          <button class="button secondary small" type="button" data-admin-live-action="email">${icons.mail}<span>Email</span></button>
+          <button class="button secondary small" type="button" data-admin-live-action="transcript">${icons.reply}<span>Transcript</span></button>
         </div>
         <div id="admin-live-conversation" class="admin-live-thread"><div class="empty-state">Select a live chat.</div></div>
       </section>
@@ -3572,6 +3631,8 @@ function bindAdminLiveInbox(content, selectedId, options = {}) {
   document.querySelectorAll("[data-live-thread]").forEach((button) => {
     button.addEventListener("click", () => {
       content.dataset.selectedThread = button.dataset.liveThread;
+      content.classList.add("chat-thread-visible");
+      content.classList.remove("chat-list-visible");
       document.querySelectorAll("[data-live-thread]").forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
       loadAdminLiveThread(button.dataset.liveThread);
@@ -3580,7 +3641,23 @@ function bindAdminLiveInbox(content, selectedId, options = {}) {
 
   if (selectedId) {
     content.dataset.selectedThread = selectedId;
+    content.classList.add("chat-thread-visible");
+    content.classList.remove("chat-list-visible");
     loadAdminLiveThread(selectedId, options);
+  } else {
+    content.classList.add("chat-list-visible");
+    content.classList.remove("chat-thread-visible");
+  }
+
+  const back = document.getElementById("admin-live-back");
+  if (back) {
+    back.addEventListener("click", () => {
+      delete content.dataset.selectedThread;
+      content.classList.add("chat-list-visible");
+      content.classList.remove("chat-thread-visible");
+      document.querySelectorAll("[data-live-thread]").forEach((item) => item.classList.remove("active"));
+      content.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   const inlineRefresh = document.getElementById("admin-live-refresh-inline");
@@ -3630,6 +3707,11 @@ async function loadAdminLiveThread(threadId, options = {}) {
       <div class="typing-indicator ${visitorTyping ? "show" : ""}" id="admin-visitor-typing">
         <span>Visitor is typing</span><i></i><i></i><i></i>
       </div>
+      <div class="admin-live-thread-actions">
+        <button class="button secondary small" type="button">${icons.inbox}<span>New ticket</span></button>
+        <button class="button secondary small" type="button">${icons.mail}<span>Email</span></button>
+        <button class="button secondary small" type="button">${icons.reply}<span>Transcript</span></button>
+      </div>
       <form class="form" id="admin-live-reply-form">
         <div class="admin-reply-row">
           <textarea id="admin-live-reply" name="message" required placeholder="Type reply..."></textarea>
@@ -3664,7 +3746,7 @@ async function loadAdminLiveThread(threadId, options = {}) {
     }
 
     const messageBox = target.querySelector(".admin-live-messages");
-    messageBox.scrollTop = messageBox.scrollHeight;
+    if (messageBox) messageBox.scrollTop = messageBox.scrollHeight;
     const replyInput = document.getElementById("admin-live-reply");
     if (replyInput) {
       if (draft) replyInput.value = draft;
@@ -3734,6 +3816,20 @@ async function loadAdmin(kind, content) {
         }
         pollAdminLiveRealtime(content);
       }, 2000);
+      return;
+    }
+
+    if (["contacts", "monitoring", "dm", "profile"].includes(kind)) {
+      content.innerHTML = `
+        ${statHtml}
+        <section class="card admin-placeholder-card">
+          <div class="card-body">
+            <span class="badge">${escapeHtml(adminNavLabels()[kind] || kind)}</span>
+            <h2>${escapeHtml(adminNavLabels()[kind] || kind)}</h2>
+            <p>This section is ready for future data views. For now, use the live inbox to manage active conversations.</p>
+            <div class="notice info">Mobile routing is wired. This tab can be expanded later without changing the shell.</div>
+          </div>
+        </section>`;
       return;
     }
 
