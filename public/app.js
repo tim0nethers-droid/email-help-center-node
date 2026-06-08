@@ -2007,11 +2007,12 @@ function routeContent() {
 
 function render() {
   const internalPath = isInternalPath();
+  const isAiChatPath = window.location.pathname === "/ai/chat";
   document.body.classList.toggle("menu-open", mobileOpen);
   document.body.classList.toggle("admin-shell", internalPath);
   document.getElementById("app").innerHTML = internalPath
     ? routeContent()
-    : `${header()}${routeContent()}${universalSupportBand()}${footer()}${liveChatWidget()}`;
+    : `${header()}${routeContent()}${universalSupportBand()}${footer()}${isAiChatPath ? "" : liveChatWidget()}`;
   bindGlobalEvents();
   bindPageEvents();
 }
