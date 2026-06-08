@@ -2255,8 +2255,10 @@ function bindChat() {
   }
 
   if (leadForm) {
-    leadForm.addEventListener("submit", async (event) => {
+    const handleLeadSubmit = async (event) => {
       event.preventDefault();
+      if (leadForm.dataset.submitting === "1") return;
+      leadForm.dataset.submitting = "1";
       const data = Object.fromEntries(new FormData(leadForm).entries());
       const lead = {
         name: String(data.name || "").trim(),
@@ -2354,7 +2356,11 @@ function bindChat() {
           .join("");
         liveWindow.scrollTop = liveWindow.scrollHeight;
       }
-      });
+      leadForm.dataset.submitting = "0";
+    };
+    leadForm.addEventListener("submit", handleLeadSubmit);
+    const startBtn = leadForm.querySelector('button[type="submit"]');
+    if (startBtn) startBtn.addEventListener("click", (event) => handleLeadSubmit(event));
     return;
   }
 
