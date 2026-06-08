@@ -2215,6 +2215,8 @@ function bindChat() {
   const page = document.querySelector(".ai-chat-page");
   const providerName = page?.dataset.chatProvider || "Email Help";
   const issue = page?.dataset.chatIssue || "";
+  const chatProvider = chatProviderFromQuery() || { id: "gmail", name: providerName, slug: "gmail.com" };
+  const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
   const providerDomain = providerChatDomain(chatProviderFromQuery()) || "gmail.com";
   const stateKey = chatStateKey(providerDomain);
   const initialState = readLocalJson(stateKey, { started: false, leadData: null, messages: [], sessionId: "" });
