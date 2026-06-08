@@ -594,6 +594,10 @@ const topics = [
   }
 ];
 
+providers.forEach((provider) => {
+  provider.chatProviderDomain = providerChatDomain(provider);
+});
+
 const aiTools = [
   {
     icon: "bot",
@@ -666,12 +670,39 @@ function articleUrl(provider, topic) {
   return `/provider/${provider.id}/article/${topic.id}`;
 }
 
+function providerChatDomain(provider) {
+  const map = {
+    gmail: "gmail.com",
+    outlook: "outlook.com",
+    yahoo: "yahoo.com",
+    icloud: "icloud.com",
+    protonmail: "proton.me",
+    aol: "aol.com",
+    att: "att.net",
+    xfinity: "xfinity.com",
+    verizon: "verizon.net",
+    cox: "cox.net",
+    spectrum: "spectrum.net",
+    rogers: "rogers.com",
+    bell: "bell.ca",
+    shaw: "shaw.ca"
+  };
+  return provider?.chatProviderDomain || map[provider?.id] || provider?.slug || provider?.id || "email";
+}
+
 function providerChatUrl(provider, issue = "") {
-  const providerParam = provider?.slug || provider?.id || "";
+  const providerParam = providerChatDomain(provider);
   const params = new URLSearchParams();
   if (providerParam) params.set("provider", providerParam);
   if (issue) params.set("issue", issue);
   return `/ai/chat?${params.toString()}`;
+}
+
+function openChat(providerDomain, issue = "") {
+  const normalized = providerDomain || "email";
+  const chatUrl = `/ai/chat?provider=${encodeURIComponent(normalized)}${issue ? `&issue=${encodeURIComponent(issue)}` : ""}`;
+  console.log("Opening chat", chatUrl);
+  window.location.href = chatUrl;
 }
 
 function navigate(path) {
@@ -686,9 +717,7 @@ document.addEventListener("click", (event) => {
   const providerChatButton = event.target.closest("[data-provider-open-chat]");
   if (providerChatButton) {
     event.preventDefault();
-    const chatUrl = providerChatButton.dataset.chatUrl || "/ai/chat";
-    console.log("Opening chat", chatUrl);
-    window.location.href = chatUrl;
+    openChat(providerChatButton.dataset.providerDomain || "gmail.com", providerChatButton.dataset.issue || "");
     return;
   }
 
@@ -1022,7 +1051,7 @@ function liveChatWidget() {
   if (provider) {
     return `
       <div class="live-chat-widget provider-ai-chat-widget" id="live-chat-widget">
-        <button class="provider-floating-chat-button" type="button" data-provider-open-chat data-chat-url="${providerChatUrl(provider)}" aria-label="Open ${escapeHtml(provider.name)} chat">
+        <button class="provider-floating-chat-button" type="button" data-provider-open-chat data-provider-domain="${escapeHtml(providerChatDomain(provider))}" aria-label="Open ${escapeHtml(provider.name)} chat">
           ${icons.bot}
           <span class="provider-floating-badge">1</span>
         </button>
@@ -1311,7 +1340,7 @@ function providerPage(provider) {
                     <h2>Need help faster? Chat with our team</h2>
                     <p>Get guidance from our independent support assistant.</p>
                   </div>
-                  <button class="button provider-red-button" type="button" data-provider-open-chat data-chat-url="${providerChatUrl(provider)}">Start Chat Now</button>
+                  <button class="button provider-red-button" type="button" data-provider-open-chat data-provider-domain="${escapeHtml(providerChatDomain(provider))}">Start Chat Now</button>
                 </div>
                 <div class="notice info">Or select your issue below for step-by-step guidance.</div>
                 <div class="card provider-troubleshooting-card"><div class="card-body">
@@ -1385,7 +1414,7 @@ function providerPage(provider) {
               <h3>Need Help Now?</h3>
               <p class="section-kicker">Get instant assistance</p>
               <p>Chat with our AI-powered support assistant for immediate help with your ${safeName} issues.</p>
-              <button class="button full provider-red-button" type="button" data-provider-open-chat data-chat-url="${providerChatUrl(provider)}">Start Live Chat</button>
+              <button class="button full provider-red-button" type="button" data-provider-open-chat data-provider-domain="${escapeHtml(providerChatDomain(provider))}">Start Live Chat</button>
               <small>Instant &bull; Free &bull; Independent resource, not affiliated with ${safeName}</small>
             </div></div>
             <div class="card"><div class="card-body">
@@ -1534,14 +1563,69 @@ Please note: We are an independent resource and not affiliated with ${providerNa
 Could you tell me what issue you're facing?`;
 }
 
+function chatStateKey(providerDomain) {
+  return `ehc_ai_chat_state_${String(providerDomain || "email").toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+}
+
+function readChatState(providerDomain) {
+  return readLocalJson(chatStateKey(providerDomain), { started: false, leadData: null, messages: [] });
+}
+
+function writeChatState(providerDomain, state) {
+  localStorage.setItem(chatStateKey(providerDomain), JSON.stringify(state));
+}
+
+function chatInitialMessage(providerName, leadData) {
+  const name = (leadData?.name || "").trim() || "there";
+  const issue = (leadData?.issue || "").trim() || "your Gmail issue";
+  const message = (leadData?.message || "").trim();
+  return `Hi ${name}. 👋 Welcome to our independent Gmail help center. I'm an AI assistant here to help troubleshoot your issue.
+
+⚠️ Please note: We are an independent resource and not affiliated with Gmail.
+
+I can see you're experiencing: ${issue}${message ? `\n\nYour message: ${message}` : ""}
+
+Let me help you work through this. Could you tell me a bit more about when this issue started?`;
+}
+
+const quickReplyResponses = {
+  "Yes, I've already tried that":
+    "I understand. Let's try the next step. Please check whether the issue happens on another browser, device, or internet connection.",
+  "Can you explain that differently?":
+    "Of course. I'll explain it more simply. We'll check your account access, inbox settings, storage, and device setup one by one.",
+  "This started happening today":
+    "Thanks. If it started today, it may be related to recent password changes, browser cache, device settings, or temporary email service delays.",
+  "How long will this take?":
+    "Most basic email troubleshooting steps take a few minutes. More complex account access issues may take longer and may require using Gmail's official recovery process.",
+  "Request Callback":
+    "Please confirm your phone number. Our assistant can use this information to prepare callback guidance. This is independent guidance only, not official Gmail support."
+};
+
+function quickReplyResponse(prompt, leadData) {
+  const phone = (leadData?.phone || "").trim() || "your phone number";
+  if (prompt === "Request Callback") {
+    return `Please confirm your phone number: ${phone}. Our assistant can use this information to prepare callback guidance. This is independent guidance only, not official Gmail support.`;
+  }
+  return quickReplyResponses[prompt] || "Let's keep going step by step.";
+}
+
+function freeTextResponse(leadData) {
+  return "Thanks for the details. Based on what you shared, I recommend checking login status, storage, filters, spam folder, and device settings first. I can guide you step by step.";
+}
+
 function chatPage() {
   const chatProvider = chatProviderFromQuery();
   const issue = new URL(window.location.href).searchParams.get("issue") || "";
+  const state = readChatState(chatProvider.id);
+  const chatStarted = Boolean(state.started);
+  const leadData = state.leadData || { name: "", phone: "", issue: issue || "", message: "" };
   const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
-  return `
-    <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(issue)}">
+  return chatStarted
+    ? `
+    <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(leadData.issue || issue || "")}" data-chat-started="true">
       <section class="ai-chat-hero">
         <div class="container">
+          <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
           <span class="badge">${icons.bot}${escapeHtml(chatProvider.name)} Help (Independent)</span>
           <h1>${escapeHtml(chatProvider.name)} Help</h1>
           <p>Get guided troubleshooting from our independent AI assistant. Do not share passwords, OTPs, recovery codes, payment details, or private mailbox content.</p>
@@ -1552,17 +1636,22 @@ function chatPage() {
           <div class="card ai-chat-card">
             <div class="ai-chat-head">
               <div>
-                <strong>${escapeHtml(chatProvider.name)} Help (Independent)</strong>
+                <strong>${escapeHtml(chatProvider.name)} Help</strong>
+                <span>Independent</span>
                 <span><i></i> Online now</span>
               </div>
               ${icons.bot}
             </div>
             <div id="chat-window" class="chat-window ai-chat-window"></div>
-            <div class="quick-reply-row">
-              ${quickReplies.map((prompt) => `<button class="quick-chip quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join("")}
+            <div class="quick-reply-row quick-replies">
+              ${quickReplies
+                .map((prompt) =>
+                  `<button class="quick-reply-btn quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${prompt === "Request Callback" ? `${icons.phone}<span>${escapeHtml(prompt)}</span>` : escapeHtml(prompt)}</button>`
+                )
+                .join("")}
             </div>
             <form class="chat-form" id="chat-form">
-              <input id="chat-input" type="text" placeholder="Type your ${escapeHtml(chatProvider.name)} issue" autocomplete="off" />
+              <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
               <button class="button" type="submit">${icons.reply}Send</button>
             </form>
           </div>
@@ -1571,6 +1660,31 @@ function chatPage() {
             <p>This chat provides educational troubleshooting steps only. It is not connected with Google, Gmail, or any email service provider.</p>
             <div class="notice" style="margin-top:16px">Never send passwords, OTPs, or recovery codes in chat.</div>
           </div></aside>
+        </div>
+      </section>
+    </main>`
+    : `
+    <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(issue)}" data-chat-started="false">
+      <section class="section ai-chat-section">
+        <div class="container ai-chat-start-shell">
+          <div class="card ai-chat-start-card">
+            <div class="card-body">
+              <span class="badge">${icons.bot}Independent AI-powered support assistant</span>
+              <h1>Gmail Help Chat</h1>
+              <p class="meta-line">Independent resource - not affiliated with Gmail</p>
+              <form class="form ai-chat-start-form" id="chat-lead-form">
+                <div class="form-row">
+                  <div class="field"><label>Full Name</label><input name="name" required placeholder="Full Name" value="${escapeHtml(leadData.name || "")}"></div>
+                  <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required placeholder="Phone Number" value="${escapeHtml(leadData.phone || "")}"></div>
+                </div>
+                <div class="form-row">
+                  <div class="field"><label>Issue / Problem</label><input name="issue" required placeholder="Issue / Problem" value="${escapeHtml(leadData.issue || issue || "")}"></div>
+                  <div class="field"><label>Message</label><textarea name="message" required placeholder="Message">${escapeHtml(leadData.message || "")}</textarea></div>
+                </div>
+                <button class="button provider-red-button" type="submit">Start Help Chat</button>
+              </form>
+            </div>
+          </div>
         </div>
       </section>
     </main>`;
@@ -1913,6 +2027,11 @@ function bindGlobalEvents() {
   document.querySelectorAll("[data-open-live-chat]").forEach((button) => {
     button.addEventListener("click", () => {
       if (isInternalPath()) return;
+      const provider = currentProviderFromPath();
+      if (provider) {
+        openChat(providerChatDomain(provider));
+        return;
+      }
       localStorage.setItem("ehc_live_chat_open", "true");
       render();
     });
@@ -2062,18 +2181,19 @@ function chatSessionId() {
 function bindChat() {
   const windowEl = document.getElementById("chat-window");
   const form = document.getElementById("chat-form");
-  if (!windowEl || !form) return;
+  const leadForm = document.getElementById("chat-lead-form");
+  if (!windowEl && !leadForm) return;
 
   const page = document.querySelector(".ai-chat-page");
   const providerName = page?.dataset.chatProvider || "Email Help";
   const issue = page?.dataset.chatIssue || "";
-  const historyKey = `ehc_chat_history_${providerName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
-  const history = readLocalJson(historyKey, []);
-  if (!history.length) {
-    history.push({
-      role: "bot",
-      text: chatWelcomeMessage(providerName)
-    });
+  const providerDomain = providerChatDomain({ id: chatProviderFromQuery().id }) || "gmail.com";
+  const stateKey = chatStateKey(providerDomain);
+  const state = readLocalJson(stateKey, { started: false, leadData: null, messages: [] });
+  const history = Array.isArray(state.messages) ? state.messages : [];
+
+  if (!history.length && state.started && state.leadData) {
+    history.push({ role: "bot", text: chatInitialMessage(providerName, state.leadData) });
   }
 
   const draw = () => {
@@ -2081,30 +2201,48 @@ function bindChat() {
       .map((message) => `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text)}</div></div>`)
       .join("");
     windowEl.scrollTop = windowEl.scrollHeight;
-    localStorage.setItem(historyKey, JSON.stringify(history.slice(-30)));
+    writeChatState(providerDomain, { started: true, leadData: state.leadData, messages: history.slice(-30) });
   };
-  draw();
 
   const input = document.getElementById("chat-input");
-  if (issue && input && !input.value) input.value = issue;
+  if (input && issue && !input.value) input.value = issue;
+
+  if (page?.dataset.chatStarted === "true" && windowEl && form) {
+    if (!history.length) {
+      history.push({ role: "bot", text: chatInitialMessage(providerName, state.leadData || { name: "", phone: "", issue, message: "" }) });
+    }
+    draw();
+  }
+
+  if (leadForm) {
+    leadForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(leadForm).entries());
+      const nextState = {
+        started: true,
+        leadData: {
+          name: String(data.name || "").trim(),
+          phone: String(data.phone || "").trim(),
+          issue: String(data.issue || "").trim(),
+          message: String(data.message || "").trim()
+        },
+        messages: [
+          { role: "bot", text: chatInitialMessage(providerName, data) }
+        ]
+      };
+      writeChatState(providerDomain, nextState);
+      render();
+    });
+    return;
+  }
 
   async function sendMessage(text) {
     history.push({ role: "user", text });
+    const leadData = state.leadData || {};
+    const reply = quickReplyResponses[text] ? quickReplyResponse(text, leadData) : freeTextResponse(leadData);
+    history.push({ role: "bot", text: reply });
+    writeChatState(providerDomain, { started: true, leadData, messages: history.slice(-30) });
     draw();
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: chatSessionId(), provider: providerName, message: text })
-      });
-      const json = await readApiJson(response);
-      if (!response.ok) throw new Error(json.error || "Chat failed");
-      history.push({ role: "bot", text: json.answer });
-      draw();
-    } catch (error) {
-      history.push({ role: "bot", text: `Sorry, I could not send that message: ${error.message}` });
-      draw();
-    }
   }
 
   form.addEventListener("submit", (event) => {
