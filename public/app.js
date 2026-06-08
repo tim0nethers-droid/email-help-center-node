@@ -1642,7 +1642,7 @@ function chatPage() {
               <div>
                 <strong>${escapeHtml(chatProvider.name)} Help</strong>
                 <span>Independent</span>
-                <small><i></i> Online • ${escapeHtml(leadData.name || "Visitor")}</small>
+                <small><i></i> Online - ${escapeHtml(leadData.name || "Visitor")}</small>
               </div>
             </div>
             <div class="ai-chat-live-status"><i></i> Online</div>
@@ -1660,7 +1660,7 @@ function chatPage() {
               <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
               <button class="button" type="submit">${icons.reply}Send</button>
             </form>
-            <div class="ai-chat-note">AI assistant online • Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
+            <div class="ai-chat-note">AI assistant online - Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
           </div>
         </div>
       </section>
@@ -2225,7 +2225,10 @@ function bindChat() {
   const draw = () => {
     if (!windowEl) return;
     windowEl.innerHTML = history
-      .map((message) => `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text)}</div></div>`)
+      .map(
+        (message) =>
+          `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
+      )
       .join("");
     windowEl.scrollTop = windowEl.scrollHeight;
     persist();
