@@ -1699,7 +1699,7 @@ function chatPage() {
                 </div>
                 <input type="hidden" name="company" value="${escapeHtml(chatProvider.name)}">
                 <button class="button provider-red-button" type="button" id="chat-start-button">Start Help Chat</button>
-                <div class="helper ai-chat-secure">Secure &amp; encrypted connection</div>
+                <div id="chat-start-status" class="helper ai-chat-secure" aria-live="polite">Secure &amp; encrypted connection</div>
               </form>
             </div>
           </div>
@@ -2266,6 +2266,8 @@ function bindChat() {
         event.preventDefault();
         if (leadForm.dataset.submitting === "1") return;
         leadForm.dataset.submitting = "1";
+        const statusEl = document.getElementById("chat-start-status");
+        if (statusEl) statusEl.textContent = "Starting chat...";
         const data = Object.fromEntries(new FormData(leadForm).entries());
         const lead = {
           name: String(data.name || "").trim(),
@@ -2338,6 +2340,7 @@ function bindChat() {
             .join("");
           liveWindow.scrollTop = liveWindow.scrollHeight;
         }
+        if (statusEl) statusEl.textContent = "Chat opened. Saving request...";
         leadForm.dataset.submitting = "0";
         try {
           const response = await fetch("/api/live/start", {
@@ -2365,8 +2368,11 @@ function bindChat() {
         } catch (error) {
           console.warn("Could not save live chat lead:", error);
         }
+        if (statusEl) statusEl.textContent = "Chat started.";
       } catch (error) {
         console.error("handleLeadSubmit failed", error);
+        const statusEl = document.getElementById("chat-start-status");
+        if (statusEl) statusEl.textContent = "Chat could not start. Please try again.";
         leadForm.dataset.submitting = "0";
       }
     };
