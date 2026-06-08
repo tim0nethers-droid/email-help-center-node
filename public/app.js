@@ -1590,6 +1590,12 @@ Your message: ${message}` : ""}
 Let me help you work through this. Could you tell me a bit more about when this issue started?`;
 }
 
+function chatFollowupMessage(providerName, leadData) {
+  const name = (leadData?.name || "").trim() || "there";
+  const issue = (leadData?.issue || "").trim() || "your issue";
+  return `Hi ${name}! I’m glad to help with ${issue}. Could you tell me a bit more about when this started, and whether it happens on the Gmail app, a browser, or both?`;
+}
+
 const quickReplyResponses = {
   "Yes, I've already tried that":
     "I understand. Let's try the next step. Please check whether this issue happens on another browser, device, or internet connection.",
@@ -2274,8 +2280,13 @@ function bindChat() {
       }
       state.started = true;
       state.leadData = lead;
-      history = [{ role: "bot", text: chatInitialMessage(providerName, lead) }];
+      history = [
+        { role: "bot", text: chatInitialMessage(providerName, lead) },
+        { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
+        { role: "bot", text: chatFollowupMessage(providerName, lead) }
+      ];
       draw();
+      window.scrollTo({ top: 0, behavior: "smooth" });
       render();
     });
     return;
