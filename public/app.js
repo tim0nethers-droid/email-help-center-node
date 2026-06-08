@@ -33,7 +33,7 @@ const translations = {
     searchPlaceholder: "Search for help, for example reset password or email settings",
     searchButton: "Search",
     disclaimer:
-      "Independent third-party resource. Not affiliated with, endorsed by, or sponsored by any email service provider."
+      "Independent Third-Party Resource — This website is NOT affiliated with, endorsed by, or sponsored by Google, Microsoft, Yahoo, Apple, or any email service provider. We provide independent educational guides and AI tools only."
   },
   es: {
     navProviders: "Proveedores",
@@ -666,6 +666,14 @@ function articleUrl(provider, topic) {
   return `/provider/${provider.id}/article/${topic.id}`;
 }
 
+function providerChatUrl(provider, issue = "") {
+  const providerParam = provider?.slug || provider?.id || "";
+  const params = new URLSearchParams();
+  if (providerParam) params.set("provider", providerParam);
+  if (issue) params.set("issue", issue);
+  return `/ai/chat?${params.toString()}`;
+}
+
 function navigate(path) {
   if (!path.startsWith("/admin/live")) stopAdminLongAlert();
   window.history.pushState({}, "", path);
@@ -718,7 +726,7 @@ function icon(name) {
 }
 
 function brand() {
-  return `<a class="brand" href="/" data-link><span class="brand-mark">${icons.mail}</span><span>Email</span></a>`;
+  return `<a class="brand" href="/" data-link><span class="brand-mark">${icons.mail}</span><span>Email Help Center</span></a>`;
 }
 
 function logo(provider) {
@@ -759,7 +767,7 @@ function header() {
 
   return `
     <a class="skip-link" href="#main">Skip to content</a>
-    <div class="disclaimer-bar"><div class="container">${icons.alert}<span>${t("disclaimer")}</span></div></div>
+    <div class="disclaimer-bar"><div class="container">${icons.alert}<span>Independent Third-Party Resource &mdash; This website is NOT affiliated with, endorsed by, or sponsored by Google, Microsoft, Yahoo, Apple, or any email service provider. We provide independent educational guides and AI tools only.</span></div></div>
     <header class="site-header">
       <div class="container header-row">
         ${brand()}
@@ -791,6 +799,8 @@ function header() {
           <select class="language-select" id="language-select" aria-label="Language">
             ${Object.keys(translations).map((lang) => `<option value="${lang}" ${lang === currentLanguage ? "selected" : ""}>${lang.toUpperCase()}</option>`).join("")}
           </select>
+          <a class="signin-link" href="/auth" data-link>Sign In</a>
+          <a class="button small signup-link" href="/auth" data-link>Sign Up</a>
           <button class="icon-btn mobile-menu-btn" id="mobile-menu-button" type="button" aria-label="Open menu">${icons.menu}</button>
         </div>
       </div>
@@ -999,6 +1009,17 @@ function isInternalPath(pathname = window.location.pathname) {
 
 function liveChatWidget() {
   if (isInternalPath()) return "";
+  const provider = currentProviderFromPath();
+  if (provider) {
+    return `
+      <div class="live-chat-widget provider-ai-chat-widget" id="live-chat-widget">
+        <a class="live-chat-toggle active" href="${providerChatUrl(provider)}" data-link aria-label="Open ${escapeHtml(provider.name)} chat">
+          <span class="live-status-dot"></span>
+          ${icons.bot}
+          <span>Live Chat</span>
+        </a>
+      </div>`;
+  }
   const isOpen = localStorage.getItem("ehc_live_chat_open") === "true";
   const activeSession = Boolean(currentLiveChatSession());
   return `
@@ -1200,16 +1221,29 @@ function providerPage(provider) {
   const brandName = escapeHtml(meta.brandName);
   const sourcePage = escapeHtml(`${window.location.pathname}${window.location.search}`);
   const initialTab = new URL(window.location.href).searchParams.get("section") === "articles" ? "articles" : "troubleshooter";
-  const issueCards = [
-    ["Login & Password", `Sign-in, password reset, and access guidance for ${meta.shortName}.`, "lock"],
-    [`${meta.shortName} Not Receiving Emails`, "Check filters, blocked senders, spam folders, forwarding, and storage.", "inbox"],
-    ["Account Security", "Review suspicious activity, recovery options, app access, and safer sign-in habits.", "shield"],
-    [`${meta.shortName} Setup`, "Set up mailbox access, IMAP/SMTP basics, and common email app settings.", "settings"],
-    ["Mobile Setup", `Add ${meta.shortName} to phone mail apps and fix sync problems.`, "phone"],
-    ["Storage Full", "Find storage limits, large attachments, trash, and inbox cleanup steps.", "trash"],
-    ["Attachment Issues", "Troubleshoot upload, download, file size, and blocked attachment problems.", "paperclip"],
-    ["Email Forwarding", "Review forwarding rules, filters, POP/IMAP, and delivery paths.", "reply"]
-  ];
+  const chatUrl = providerChatUrl(provider);
+  const issueCards =
+    provider.id === "gmail"
+      ? [
+          ["Login & Password", "Sign-in and password guidance for Gmail access issues.", "lock"],
+          ["Account Recovery", "Understand the safe recovery path and recovery info checks.", "shield"],
+          ["Gmail Not Loading", "Troubleshoot browser, cache, network, and app loading problems.", "settings"],
+          ["Send/Receive Issue", "Check delivery delays, spam, filters, forwarding, and blocked senders.", "inbox"],
+          ["Storage Issue", "Review storage limits, large attachments, and cleanup steps.", "trash"],
+          ["Spam / Security", "Review suspicious mail, spam settings, and account safety tips.", "alert"],
+          ["Mobile App Issue", "Fix Gmail app sync, setup, notifications, and device access.", "phone"],
+          ["Two-Step Verification", "Check 2-step verification, app passwords, and safer sign-in options.", "lock"]
+        ]
+      : [
+          ["Login & Password", `Sign-in, password reset, and access guidance for ${meta.shortName}.`, "lock"],
+          ["Account Recovery", "Review recovery options and account access guidance.", "shield"],
+          [`${meta.shortName} Not Loading`, "Check browser, network, app, and device loading problems.", "settings"],
+          ["Send/Receive Issue", "Check filters, blocked senders, spam folders, forwarding, and storage.", "inbox"],
+          ["Storage Issue", "Find storage limits, large attachments, trash, and inbox cleanup steps.", "trash"],
+          ["Spam / Security", "Review suspicious activity, spam settings, and safer account habits.", "alert"],
+          ["Mobile App Issue", `Add ${meta.shortName} to phone mail apps and fix sync problems.`, "phone"],
+          ["Two-Step Verification", "Review 2-step verification, app passwords, and sign-in checks.", "lock"]
+        ];
   const articles = [
     [`How to set up ${meta.shortName} on mobile`, `A simple mobile setup guide for ${meta.shortName} on common devices.`, "phone"],
     [`Why ${meta.shortName} is not receiving emails`, "Understand the most common inbox delivery causes and checks.", "inbox"],
@@ -1265,7 +1299,7 @@ function providerPage(provider) {
       <section class="section">
         <div class="container article-layout">
           <div class="article-content">
-            <div class="notice">Independent resource, not affiliated with ${provider.name}. We cannot access your account, reset passwords, or provide official support.</div>
+            <div class="notice">Independent resource, not affiliated with ${provider.name}. We cannot access your account, reset passwords, or act as the provider.</div>
             <div class="provider-tabs" data-provider-tabs>
               <div class="provider-tablist" role="tablist" aria-label="${provider.name} help sections">
                 <button class="provider-tab ${initialTab === "troubleshooter" ? "active" : ""}" type="button" data-provider-tab="troubleshooter">Troubleshooter</button>
@@ -1279,7 +1313,7 @@ function providerPage(provider) {
                     <h2>Need help faster? Chat with our team</h2>
                     <p>Get guidance from our independent support assistant.</p>
                   </div>
-                  <button class="button" type="button" data-provider-scroll-form>Start Chat Now</button>
+                  <a class="button" href="${chatUrl}" data-link>Start Chat Now</a>
                 </div>
                 <div class="notice info">Or select your issue below for step-by-step guidance.</div>
                 <div class="card"><div class="card-body">
@@ -1293,7 +1327,7 @@ function providerPage(provider) {
                           ${icon(iconName)}
                           <h3>${escapeHtml(title)}</h3>
                           <p>${escapeHtml(desc)}</p>
-                          <button class="button secondary small" type="button" data-provider-scroll-form>View guide</button>
+                          <a class="button secondary small" href="${providerChatUrl(provider, title)}" data-link>View guide</a>
                         </article>`
                       )
                       .join("")}
@@ -1305,7 +1339,7 @@ function providerPage(provider) {
                     <h2>Can't find your issue?</h2>
                     <p>Chat with our assistant.</p>
                   </div>
-                  <button class="button secondary" type="button" data-provider-scroll-form>Start Chat</button>
+                  <a class="button secondary" href="${chatUrl}" data-link>Start Chat</a>
                 </div>
               </section>
               <section class="provider-tab-panel ${initialTab === "articles" ? "active" : ""}" data-provider-panel="articles">
@@ -1351,8 +1385,9 @@ function providerPage(provider) {
             <div class="card support-card provider-help-card"><div class="card-body">
               ${icon("bot")}
               <h3>Need Help Now?</h3>
+              <p class="section-kicker">Get instant assistance</p>
               <p>Chat with our AI-powered support assistant for immediate help with your ${safeName} issues.</p>
-              <button class="button full" type="button" data-provider-scroll-form>Start Live Chat</button>
+              <a class="button full" href="${chatUrl}" data-link>Start Live Chat</a>
               <small>Instant - Free - Independent resource, not affiliated with ${safeName}</small>
             </div></div>
             <div class="card"><div class="card-body">
@@ -1474,32 +1509,68 @@ function articlePage(provider, topicItem) {
     </main>`;
 }
 
+function chatProviderFromQuery() {
+  const value = new URL(window.location.href).searchParams.get("provider") || "";
+  const key = value.toLowerCase();
+  const map = {
+    "gmail.com": { name: "Gmail", id: "gmail" },
+    gmail: { name: "Gmail", id: "gmail" },
+    "icloud.com": { name: "iCloud Mail", id: "icloud" },
+    icloud: { name: "iCloud Mail", id: "icloud" },
+    "yahoo.com": { name: "Yahoo Mail", id: "yahoo" },
+    yahoo: { name: "Yahoo Mail", id: "yahoo" },
+    "outlook.com": { name: "Outlook", id: "outlook" },
+    outlook: { name: "Outlook", id: "outlook" },
+    "hotmail.com": { name: "Outlook", id: "outlook" }
+  };
+  if (map[key]) return map[key];
+  const provider = findProviderByRoute(key) || providers.find((item) => item.slug === key);
+  return provider ? { name: providerGuideMeta(provider).shortName, id: provider.id } : { name: "Email Help", id: "email" };
+}
+
+function chatWelcomeMessage(providerName) {
+  return `Hi 👋 Welcome to our independent ${providerName} help center. I'm an AI assistant here to help troubleshoot your issue.
+
+Please note: We are an independent resource and not affiliated with ${providerName}.
+
+Could you tell me what issue you're facing?`;
+}
+
 function chatPage() {
+  const chatProvider = chatProviderFromQuery();
+  const issue = new URL(window.location.href).searchParams.get("issue") || "";
+  const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
   return `
-    <main id="main" class="page">
-      <section class="page-hero">
+    <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(issue)}">
+      <section class="ai-chat-hero">
         <div class="container">
-          <span class="badge">${icons.bot}AI Support Chat</span>
-          <h1>Self-Help Chat Assistant</h1>
-          <p>Ask about email setup, delivery, account recovery steps, attachments, storage, or suspicious activity. Do not share passwords or OTPs.</p>
+          <span class="badge">${icons.bot}${escapeHtml(chatProvider.name)} Help (Independent)</span>
+          <h1>${escapeHtml(chatProvider.name)} Help</h1>
+          <p>Get guided troubleshooting from our independent AI assistant. Do not share passwords, OTPs, recovery codes, payment details, or private mailbox content.</p>
         </div>
       </section>
-      <section class="section">
-        <div class="container tool-shell">
-          <div class="card">
-            <div id="chat-window" class="chat-window"></div>
+      <section class="section ai-chat-section">
+        <div class="container ai-chat-shell">
+          <div class="card ai-chat-card">
+            <div class="ai-chat-head">
+              <div>
+                <strong>${escapeHtml(chatProvider.name)} Help (Independent)</strong>
+                <span><i></i> Online now</span>
+              </div>
+              ${icons.bot}
+            </div>
+            <div id="chat-window" class="chat-window ai-chat-window"></div>
+            <div class="quick-reply-row">
+              ${quickReplies.map((prompt) => `<button class="quick-chip quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join("")}
+            </div>
             <form class="chat-form" id="chat-form">
-              <input id="chat-input" type="text" placeholder="Type your issue, e.g. Outlook not syncing on iPhone" autocomplete="off" />
+              <input id="chat-input" type="text" placeholder="Type your ${escapeHtml(chatProvider.name)} issue" autocomplete="off" />
               <button class="button" type="submit">${icons.reply}Send</button>
             </form>
           </div>
-          <aside class="card"><div class="card-body">
-            <h3>Quick Prompts</h3>
-            <div class="category-list">
-              ${["Gmail password reset", "Yahoo not receiving emails", "Outlook setup on iPhone", "iCloud storage full", "Account may be hacked"]
-                .map((prompt) => `<button class="category-item quick-prompt" type="button" data-prompt="${prompt}"><span>${prompt}</span><span>${icons.reply}</span></button>`)
-                .join("")}
-            </div>
+          <aside class="card ai-chat-side"><div class="card-body">
+            <h3>Independent resource</h3>
+            <p>This chat provides educational troubleshooting steps only. It is not connected with Google, Gmail, or any email service provider.</p>
             <div class="notice" style="margin-top:16px">Never send passwords, OTPs, or recovery codes in chat.</div>
           </div></aside>
         </div>
@@ -1992,11 +2063,15 @@ function bindChat() {
   const form = document.getElementById("chat-form");
   if (!windowEl || !form) return;
 
-  const history = readLocalJson("ehc_chat_history", []);
+  const page = document.querySelector(".ai-chat-page");
+  const providerName = page?.dataset.chatProvider || "Email Help";
+  const issue = page?.dataset.chatIssue || "";
+  const historyKey = `ehc_chat_history_${providerName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+  const history = readLocalJson(historyKey, []);
   if (!history.length) {
     history.push({
       role: "bot",
-      text: "Hi. Tell me your email provider and issue. Please do not share passwords, OTPs, recovery codes, or private mailbox content."
+      text: chatWelcomeMessage(providerName)
     });
   }
 
@@ -2005,9 +2080,12 @@ function bindChat() {
       .map((message) => `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text)}</div></div>`)
       .join("");
     windowEl.scrollTop = windowEl.scrollHeight;
-    localStorage.setItem("ehc_chat_history", JSON.stringify(history.slice(-30)));
+    localStorage.setItem(historyKey, JSON.stringify(history.slice(-30)));
   };
   draw();
+
+  const input = document.getElementById("chat-input");
+  if (issue && input && !input.value) input.value = issue;
 
   async function sendMessage(text) {
     history.push({ role: "user", text });
@@ -2016,7 +2094,7 @@ function bindChat() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: chatSessionId(), message: text })
+        body: JSON.stringify({ sessionId: chatSessionId(), provider: providerName, message: text })
       });
       const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Chat failed");
@@ -2030,7 +2108,6 @@ function bindChat() {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const input = document.getElementById("chat-input");
     const text = input.value.trim();
     if (!text) return;
     input.value = "";
