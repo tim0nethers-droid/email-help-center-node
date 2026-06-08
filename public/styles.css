@@ -2118,6 +2118,10 @@ textarea::placeholder {
   z-index: 9999;
 }
 
+body.ai-chat-route .live-chat-widget {
+  display: none !important;
+}
+
 .live-chat-toggle {
   display: inline-flex;
   align-items: center;

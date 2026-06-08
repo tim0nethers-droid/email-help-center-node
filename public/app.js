@@ -2013,6 +2013,12 @@ function render() {
   document.getElementById("app").innerHTML = internalPath
     ? routeContent()
     : `${header()}${routeContent()}${universalSupportBand()}${footer()}${isAiChatPath ? "" : liveChatWidget()}`;
+  if (isAiChatPath) {
+    document.body.classList.add("ai-chat-route");
+    localStorage.setItem("ehc_live_chat_open", "false");
+  } else {
+    document.body.classList.remove("ai-chat-route");
+  }
   bindGlobalEvents();
   bindPageEvents();
 }
