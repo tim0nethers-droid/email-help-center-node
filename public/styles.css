@@ -914,7 +914,55 @@ textarea::placeholder {
 }
 
 .provider-help-card {
+  border-color: rgba(29, 99, 216, 0.55);
   background: linear-gradient(180deg, #eff6ff, #ffffff);
+}
+
+.provider-help-card .icon {
+  background: #1d63d8;
+  color: white;
+}
+
+.provider-help-card .button {
+  background: #ef3b33;
+  color: white;
+}
+
+.provider-help-card .button:hover {
+  background: #dc2626;
+}
+
+.provider-floating-chat-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: #1d63d8;
+  color: white;
+  box-shadow: 0 16px 38px rgba(29, 99, 216, 0.34);
+}
+
+.provider-floating-chat-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.provider-floating-badge {
+  position: absolute;
+  top: -3px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border: 2px solid white;
+  border-radius: 999px;
+  background: #22c55e;
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 900;
 }
 
 .provider-guide-page {
@@ -922,11 +970,9 @@ textarea::placeholder {
 }
 
 .provider-guide-hero {
-  border-bottom: 1px solid var(--border);
-  background:
-    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--provider-color) 14%, transparent), transparent 30%),
-    linear-gradient(135deg, #ffffff 0%, #f8fbff 58%, #eef2ff 100%);
-  padding: 34px 0 28px;
+  border-bottom: 1px solid rgba(127, 29, 29, 0.14);
+  background: #ef3b33;
+  padding: 0;
 }
 
 .provider-guide-banner {
@@ -934,12 +980,12 @@ textarea::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-top: 18px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, var(--provider-color), #7c3aed);
+  min-height: 84px;
+  border-radius: 0;
+  background: #ef3b33;
   color: white;
-  padding: 22px;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+  padding: 14px 0;
+  box-shadow: none;
 }
 
 .provider-guide-title {
@@ -950,22 +996,25 @@ textarea::placeholder {
 }
 
 .provider-guide-title .provider-logo {
-  width: 58px;
-  height: 58px;
+  width: 48px;
+  height: 48px;
   background: rgba(255, 255, 255, 0.95);
   color: #0f172a;
   box-shadow: none;
+  border-radius: 10px;
 }
 
 .provider-guide-title h1 {
   margin: 0 0 4px;
   color: white;
-  font-size: clamp(1.55rem, 3vw, 2.3rem);
+  font-size: 1.18rem;
+  line-height: 1.15;
 }
 
 .provider-guide-title p {
   margin: 0;
   color: rgba(255, 255, 255, 0.9);
+  font-size: 0.86rem;
 }
 
 .provider-guide-actions {
@@ -977,33 +1026,14 @@ textarea::placeholder {
 
 .provider-guide-actions .button {
   border-color: rgba(255, 255, 255, 0.35);
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.86rem;
 }
 
 .provider-guide-actions .button.secondary {
   background: rgba(255, 255, 255, 0.16);
   color: white;
-}
-
-.provider-guide-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 24px;
-  align-items: stretch;
-  margin-top: 24px;
-}
-
-.provider-guide-intro h2 {
-  margin: 0 0 10px;
-  color: #0f172a;
-  font-size: clamp(2rem, 4vw, 3.5rem);
-  line-height: 1.06;
-}
-
-.provider-guide-intro p {
-  max-width: 760px;
-  color: #334155;
-  font-size: 1.08rem;
-  line-height: 1.65;
 }
 
 .provider-info-card,
@@ -1039,24 +1069,66 @@ textarea::placeholder {
 }
 
 .provider-guide-page .article-layout {
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 2.1fr) minmax(290px, 0.9fr);
+  gap: 18px;
 }
 
 .provider-guide-page .support-callout {
   border-radius: 16px;
 }
 
+.provider-guide-page .section {
+  padding-top: 22px;
+}
+
+.provider-guide-page .provider-tablist {
+  margin-bottom: 8px;
+}
+
+.provider-guide-page .provider-tab {
+  min-height: 38px;
+  padding: 0 18px;
+  font-size: 0.88rem;
+}
+
+.provider-guide-page .provider-tab.active,
+.provider-guide-page .provider-tab:hover {
+  background: #1d63d8;
+}
+
+.provider-guide-page .provider-callout {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.provider-guide-page .provider-callout .brand-mark {
+  background: #ef3b33;
+  color: white;
+}
+
+.provider-red-button,
+.provider-guide-page .provider-callout .button {
+  background: #ef3b33;
+  color: white;
+}
+
+.provider-red-button:hover,
+.provider-guide-page .provider-callout .button:hover {
+  background: #dc2626;
+}
+
 .provider-guide-page .brand-mark,
 .provider-guide-page .icon {
-  background: color-mix(in srgb, var(--provider-color) 13%, white);
-  color: var(--provider-color);
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .provider-guide-page .issue-card {
-  min-height: 216px;
+  min-height: 164px;
   align-content: start;
-  border-radius: 16px;
-  padding: 18px 14px;
+  border-radius: 8px;
+  padding: 16px 12px;
+  box-shadow: none;
 }
 
 .provider-guide-page .issue-card .button {
@@ -1096,6 +1168,11 @@ textarea::placeholder {
 
 .provider-form-card {
   scroll-margin-top: 92px;
+}
+
+.provider-troubleshooting-card {
+  border-top: 3px solid #1d63d8;
+  border-radius: 8px;
 }
 
 .provider-details-list {
@@ -2871,7 +2948,6 @@ textarea::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .provider-guide-intro,
   .provider-guide-page .article-layout {
     grid-template-columns: 1fr;
   }
@@ -3039,15 +3115,6 @@ textarea::placeholder {
   .provider-guide-actions {
     display: grid;
     justify-content: stretch;
-  }
-
-  .provider-guide-intro {
-    gap: 16px;
-    margin-top: 18px;
-  }
-
-  .provider-guide-intro h2 {
-    font-size: 2rem;
   }
 
   .provider-info-card,
