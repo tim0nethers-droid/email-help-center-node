@@ -2268,35 +2268,10 @@ function bindChat() {
         message: String(data.issue || "").trim()
       };
       const sessionId = state.sessionId || currentLiveChatSession() || chatSessionId();
-      try {
-        const response = await fetch("/api/live/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            name: lead.name,
-            phone: lead.phone,
-            email: lead.email,
-            company: String(data.company || providerName).trim() || providerName,
-            issue: lead.issue || issue,
-            message: lead.message || lead.issue,
-            sourcePage: window.location.href
-          })
-        });
-        if (response.ok) {
-          const json = await readApiJson(response);
-          if (json.thread?.id) {
-            state.sessionId = json.thread.id;
-            setCurrentLiveChatSession(json.thread.id);
-          }
-        }
-      } catch (error) {
-        console.warn("Could not save live chat lead:", error);
-      }
       state = {
         started: true,
         leadData: lead,
-        sessionId: state.sessionId,
+        sessionId,
         messages: [
           { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
           { role: "bot", text: chatFollowupMessage(providerName, lead) }
@@ -2357,6 +2332,32 @@ function bindChat() {
         liveWindow.scrollTop = liveWindow.scrollHeight;
       }
       leadForm.dataset.submitting = "0";
+      try {
+        const response = await fetch("/api/live/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            name: lead.name,
+            phone: lead.phone,
+            email: lead.email,
+            company: String(data.company || providerName).trim() || providerName,
+            issue: lead.issue || issue,
+            message: lead.message || lead.issue,
+            sourcePage: window.location.href
+          })
+        });
+        if (response.ok) {
+          const json = await readApiJson(response);
+          if (json.thread?.id) {
+            state.sessionId = json.thread.id;
+            setCurrentLiveChatSession(json.thread.id);
+            persist();
+          }
+        }
+      } catch (error) {
+        console.warn("Could not save live chat lead:", error);
+      }
     };
     const startBtn = document.getElementById("chat-start-button");
     if (startBtn) startBtn.addEventListener("click", handleLeadSubmit);
