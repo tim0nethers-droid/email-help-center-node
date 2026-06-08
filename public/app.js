@@ -3088,6 +3088,10 @@ function adminNavHref(key) {
   return `/admin/${key === "support" ? "forms" : key}`;
 }
 
+function isAdminMobileLayout() {
+  return window.matchMedia("(max-width: 680px)").matches;
+}
+
 function adminBottomNav(active) {
   const navIcons = {
     inbox: icons.mail,
@@ -3113,7 +3117,7 @@ function adminBottomNav(active) {
 
 function adminChatList(rows, selectedId) {
   return `
-    <section class="admin-chat-list-shell ${rows.length ? "" : "empty"}">
+    <section class="admin-chat-list-shell admin-mobile-inbox ${rows.length ? "" : "empty"}">
       <div class="admin-chat-list-head">
         <div>
           <h2>Inbox</h2>
@@ -3141,6 +3145,7 @@ function adminChatList(rows, selectedId) {
                         <small>${escapeHtml(messagePreview(row.lastMessage))}</small>
                         <span class="admin-chat-meta">
                           <span class="status-pill ${statusClass}">${escapeHtml(row.status || "open")}</span>
+                          ${row.unread ? `<span class="unread-pill">${escapeHtml(row.unread)}</span>` : ""}
                           <time>${lastActivityLabel(row.updatedAt)}</time>
                         </span>
                       </span>
@@ -3570,7 +3575,7 @@ async function pollAdminLiveRealtime(content) {
     adminLiveSnapshot = snapshot;
     document.title = snapshot.unread ? `(${snapshot.unread}) Email Admin` : "Email - Independent Email Guides & Free AI Tools";
 
-    const selectedId = content.dataset.selectedThread || data.rows[0]?.id || "";
+    const selectedId = content.dataset.selectedThread || (!isAdminMobileLayout() ? data.rows[0]?.id || "" : "");
     const nextSignature = adminRowsSignature(data.rows);
     if (nextSignature !== adminLiveRowsSignature || !document.querySelector("[data-live-thread]")) {
       const draftInput = document.getElementById("admin-live-reply");
@@ -3604,7 +3609,7 @@ function adminLiveDashboard(rows, selectedId, stats = {}) {
   return `
     <div class="admin-live-shell chat-list-visible${selectedId ? " chat-thread-visible" : ""}">
       ${adminChatList(rows, selectedId)}
-      <section class="admin-live-thread-shell admin-live-column admin-live-chatpane">
+      <section class="admin-live-thread-shell admin-mobile-thread admin-live-column admin-live-chatpane">
         <div class="admin-live-column-head admin-live-thread-head">
           <button class="icon-btn admin-live-back" id="admin-live-back" type="button" aria-label="Back to inbox">${icons.chevron}</button>
           <div>
@@ -3796,7 +3801,7 @@ async function loadAdmin(kind, content) {
 
     if (kind === "live") {
       const data = await adminFetch("/api/admin/live");
-      const selectedId = content.dataset.selectedThread || data.rows[0]?.id || "";
+      const selectedId = content.dataset.selectedThread || (!isAdminMobileLayout() ? data.rows[0]?.id || "" : "");
       const snapshot = adminLiveAlertSnapshot(data.rows);
       if (adminLiveSnapshot && snapshot.unread > adminLiveSnapshot.unread && snapshot.latest !== adminLiveSnapshot.latest) {
         playAdminChatSound();

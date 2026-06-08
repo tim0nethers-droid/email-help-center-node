@@ -2567,6 +2567,19 @@ body.ai-chat-route .live-chat-widget {
   color: #475569;
 }
 
+.unread-pill {
+  display: inline-flex;
+  align-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .admin-chat-chevron {
   color: var(--muted);
 }
@@ -3408,6 +3421,10 @@ body.ai-chat-route .live-chat-widget {
     display: none;
   }
 
+  .admin-live-shell.chat-list-visible .admin-live-thread-shell {
+    display: none;
+  }
+
   .admin-live-back,
   .admin-live-more {
     display: grid;
@@ -3899,6 +3916,10 @@ body.ai-chat-route .live-chat-widget {
 
   .admin-live-thread-shell {
     min-height: 68vh;
+  }
+
+  .admin-placeholder-card {
+    border-radius: 16px;
   }
 
   .admin-reply-row textarea {
