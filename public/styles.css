@@ -2895,6 +2895,10 @@ body.modal-open {
   max-height: min(560px, calc(100vh - 310px));
 }
 
+.admin-live-conversation .live-msg {
+  max-width: 88%;
+}
+
 .admin-live-conversation .live-msg.visitor {
   justify-self: start;
 }
@@ -2910,9 +2914,9 @@ body.modal-open {
 }
 
 .admin-live-conversation .live-msg.agent p {
-  border: 0;
-  background: var(--primary);
-  color: white;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text);
 }
 
 .admin-reply-row {

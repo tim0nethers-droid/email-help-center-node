@@ -3614,15 +3614,16 @@ async function pollAdminLiveRealtime(content) {
       const draftInput = document.getElementById("admin-live-reply");
       const draft = draftInput?.value || "";
       const keepFocus = document.activeElement === draftInput;
+      const preserveScroll = Boolean(content.dataset.selectedThread);
       content.innerHTML = adminLiveMetricCards(stats.stats) + adminLiveAlertBar(data.rows) + adminLiveDashboard(data.rows, selectedId, stats.stats);
       adminLiveRowsSignature = nextSignature;
       bindAdminSoundControls("live");
-      bindAdminLiveInbox(content, selectedId, { draft, keepFocus });
+      bindAdminLiveInbox(content, selectedId, { draft, keepFocus, preserveScroll, initialLoad: false });
       return;
     }
 
     pollAdminLiveAlerts();
-    if (selectedId) loadAdminLiveThread(selectedId, { quiet: true });
+    if (selectedId) loadAdminLiveThread(selectedId, { quiet: true, preserveScroll: true });
   } catch (error) {
     console.warn("Live realtime poll failed", error);
   }
@@ -3827,6 +3828,7 @@ async function openMobileChatModal(threadId, options = {}) {
 }
 
 function bindAdminLiveInbox(content, selectedId, options = {}) {
+  const initialLoad = options.initialLoad ?? true;
   document.querySelectorAll("[data-live-thread]").forEach((button) => {
     button.addEventListener("click", () => {
       content.dataset.selectedThread = button.dataset.liveThread;
@@ -3838,7 +3840,7 @@ function bindAdminLiveInbox(content, selectedId, options = {}) {
       }
       content.classList.add("chat-thread-visible");
       content.classList.remove("chat-list-visible");
-      loadAdminLiveThread(button.dataset.liveThread);
+      loadAdminLiveThread(button.dataset.liveThread, { initialLoad: true });
     });
   });
 
@@ -3846,7 +3848,7 @@ function bindAdminLiveInbox(content, selectedId, options = {}) {
     content.dataset.selectedThread = selectedId;
     content.classList.add("chat-thread-visible");
     content.classList.remove("chat-list-visible");
-    loadAdminLiveThread(selectedId, options);
+    loadAdminLiveThread(selectedId, { ...options, initialLoad });
   } else {
     content.classList.add("chat-list-visible");
     content.classList.remove("chat-thread-visible");
@@ -3883,6 +3885,10 @@ async function loadAdminLiveThread(threadId, options = {}) {
   const currentReply = document.getElementById("admin-live-reply");
   const draft = options.draft ?? currentReply?.value ?? "";
   const keepFocus = options.keepFocus ?? document.activeElement === currentReply;
+  const existingMessageBox = target.querySelector(".admin-live-messages");
+  const previousScrollTop = existingMessageBox?.scrollTop ?? 0;
+  const previousScrollHeight = existingMessageBox?.scrollHeight ?? 0;
+  const previousClientHeight = existingMessageBox?.clientHeight ?? 0;
   if (!options.quiet) {
     target.innerHTML = `<div class="empty-state">Loading conversation...</div>`;
     if (details) details.innerHTML = `<div class="empty-state">Loading visitor details...</div>`;
@@ -3951,7 +3957,15 @@ async function loadAdminLiveThread(threadId, options = {}) {
     }
 
     const messageBox = target.querySelector(".admin-live-messages");
-    if (messageBox) messageBox.scrollTop = messageBox.scrollHeight;
+    if (messageBox) {
+      const wasNearBottom = previousScrollHeight - previousScrollTop - previousClientHeight < 48;
+      const shouldStickToBottom = options.forceBottom || (!options.preserveScroll && (options.initialLoad || wasNearBottom));
+      if (shouldStickToBottom) {
+        messageBox.scrollTop = messageBox.scrollHeight;
+      } else if (options.preserveScroll) {
+        messageBox.scrollTop = previousScrollTop;
+      }
+    }
     const replyInput = document.getElementById("admin-live-reply");
     if (replyInput) {
       if (draft) replyInput.value = draft;
