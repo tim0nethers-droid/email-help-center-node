@@ -201,6 +201,35 @@ function createTicketId(prefix = "EHC") {
   return `${prefix}-${date}-${code}`;
 }
 
+function normalizeLiveLookupValue(value) {
+  return cleanText(value, 240)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function digitsOnly(value) {
+  return String(value || "").replace(/\D+/g, "");
+}
+
+function findLiveThreadMatch(rows, { sessionId = "", email = "", phone = "" } = {}) {
+  const sessionKey = cleanText(sessionId, 120);
+  const emailKey = normalizeLiveLookupValue(email);
+  const phoneKey = digitsOnly(phone);
+  const matches = rows.filter((thread) => {
+    if (sessionKey && thread.id === sessionKey) return true;
+    const visitor = thread.visitor || {};
+    const threadEmail = normalizeLiveLookupValue(visitor.email);
+    const threadPhone = digitsOnly(visitor.phone);
+    return Boolean(
+      (emailKey && threadEmail && emailKey === threadEmail) ||
+      (phoneKey && threadPhone && phoneKey === threadPhone)
+    );
+  });
+  if (!matches.length) return null;
+  return matches.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))[0];
+}
+
 function providerFromMessage(message) {
   const lowered = message.toLowerCase();
   const providers = [
@@ -507,6 +536,8 @@ async function handleApi(req, res, url) {
     const company = cleanText(body.company, 120);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
     const issue = redactSecrets(body.issue || body.message);
+    const emailKey = normalizeLiveLookupValue(email);
+    const phoneKey = digitsOnly(phone);
 
     if (!name || !phone || !email || !company || !issue) {
       jsonError(res, 400, "Name, phone, email, company, and issue are required.");
@@ -545,15 +576,28 @@ async function handleApi(req, res, url) {
       ];
 
     const rows = await readLiveChats();
-    const existingIndex = rows.findIndex((row) => row.id === sessionId);
+    let existingIndex = rows.findIndex((row) => row.id === sessionId);
+    if (existingIndex === -1 && (emailKey || phoneKey)) {
+      existingIndex = rows.findIndex((row) => {
+        const visitor = row.visitor || {};
+        const rowEmail = normalizeLiveLookupValue(visitor.email);
+        const rowPhone = digitsOnly(visitor.phone);
+        return Boolean((emailKey && rowEmail && rowEmail === emailKey) || (phoneKey && rowPhone && rowPhone === phoneKey));
+      });
+    }
     let thread;
     if (existingIndex !== -1) {
       thread = rows[existingIndex];
+      const hadVisitorMessages = (thread.messages || []).some((message) => message.from === "visitor");
       thread.visitor = { name, phone, email, company, issue, sourcePage, profileComplete: true };
       thread.status = "open";
       thread.updatedAt = new Date().toISOString();
-      const hasVisitorMessage = (thread.messages || []).some((message) => message.from === "visitor");
-      thread.messages = hasVisitorMessage ? thread.messages : initialMessages;
+      thread.messages = Array.isArray(thread.messages) ? thread.messages : [];
+      if (!thread.messages.length) {
+        thread.messages = initialMessages;
+      } else if (!hadVisitorMessages) {
+        thread.messages.unshift(visitorMessage);
+      }
       addAutoReplyIfMissing(thread);
       rows[existingIndex] = thread;
       rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
@@ -569,9 +613,14 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/live/open") {
     const body = await readBody(req);
     const sessionId = cleanText(body.sessionId, 120);
+    const email = cleanText(body.email || "", 180);
+    const phone = cleanText(body.phone || "", 40);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
     const rows = await readLiveChats();
     let thread = rows.find((row) => row.id === sessionId);
+    if (!thread && (email || phone)) {
+      thread = findLiveThreadMatch(rows, { email, phone });
+    }
     if (thread) {
       thread.status = "open";
       thread.updatedAt = new Date().toISOString();

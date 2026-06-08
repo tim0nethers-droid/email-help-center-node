@@ -1630,7 +1630,8 @@ function freeTextResponse(leadData) {
 function chatPage() {
   const chatProvider = chatProviderFromQuery();
   const issue = new URL(window.location.href).searchParams.get("issue") || "";
-  const state = readChatState(chatProvider.id);
+  const providerDomain = providerChatDomain(chatProvider) || "gmail.com";
+  const state = readChatState(providerDomain);
   const chatStarted = Boolean(state.started);
   const leadData = state.leadData || { name: "", email: "", phone: "", issue: issue || "", message: "" };
   const chatTitle = `${chatProvider.name} Help Chat`;
@@ -2625,12 +2626,17 @@ function bindLiveChatWidget() {
 
   async function ensureLiveChatSession() {
     const sessionId = currentLiveChatSession();
+    const savedVisitor = readSavedLiveChatVisitor();
     try {
       const response = await fetch(apiUrl("/api/live/open"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
+          name: savedVisitor.name || "",
+          phone: savedVisitor.phone || "",
+          email: savedVisitor.email || "",
+          company: savedVisitor.company || "",
           sourcePage: `${window.location.pathname}${window.location.search}`
         })
       });
@@ -2653,7 +2659,8 @@ function bindLiveChatWidget() {
     if (!options.auto) localStorage.setItem("ehc_live_chat_open", open ? "true" : "false");
     if (!open && options.manual) sessionStorage.setItem("ehc_live_chat_closed", "1");
     if (open) {
-      if (options.auto && !currentLiveChatSession()) {
+      const savedVisitor = readSavedLiveChatVisitor();
+      if (options.auto && !currentLiveChatSession() && !savedVisitor.email && !savedVisitor.phone) {
         drawStartForm();
         return;
       }
@@ -2883,8 +2890,20 @@ function bindLiveChatWidget() {
   async function loadLiveChatThread(options = {}) {
     const sessionId = currentLiveChatSession();
     if (!sessionId) {
-      await ensureLiveChatSession();
-      drawStartForm();
+      const thread = await ensureLiveChatSession();
+      if (!thread) {
+        drawStartForm();
+        return;
+      }
+      if (thread.visitor?.profileComplete === false && !(thread.messages || []).length) {
+        drawStartForm();
+        return;
+      }
+      drawLiveThread(thread, {
+        preserveScroll: options.quiet,
+        draft: "",
+        keepFocus: false
+      });
       return;
     }
     try {
@@ -2893,6 +2912,10 @@ function bindLiveChatWidget() {
       const response = await fetch(`/api/live/thread?sessionId=${encodeURIComponent(sessionId)}`);
       const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Could not load live chat.");
+      if (json.thread?.visitor?.profileComplete === false && !(json.thread?.messages || []).length) {
+        drawStartForm();
+        return;
+      }
       drawLiveThread(json.thread, {
         preserveScroll: options.quiet,
         typing: json.typing,
@@ -2915,6 +2938,12 @@ function bindLiveChatWidget() {
       if (sessionStorage.getItem("ehc_live_chat_closed") === "1") return;
       if (sessionStorage.getItem("ehc_live_chat_auto_opened") === "1") return;
       if (widget.classList.contains("open")) return;
+      const savedVisitor = readSavedLiveChatVisitor();
+      if (!currentLiveChatSession() && !savedVisitor.email && !savedVisitor.phone) {
+        sessionStorage.setItem("ehc_live_chat_auto_opened", "1");
+        setOpen(true, { auto: true });
+        return;
+      }
       sessionStorage.setItem("ehc_live_chat_auto_opened", "1");
       setOpen(true, { auto: true });
     }, 10000);
