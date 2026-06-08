@@ -648,6 +648,9 @@ let adminLiveSnapshot = null;
 let adminLiveRowsSignature = "";
 let adminSoundEnabled = localStorage.getItem("ehc_admin_sound") === "true";
 let adminAudioContext = null;
+let mobileChatModalOpenThreadId = "";
+let mobileChatModalLastFocus = null;
+let mobileChatModalKeyHandler = null;
 let adminAlertInterval = null;
 let adminAlertTimeout = null;
 let adminKnownUnreadVisitorIds = new Set();
@@ -1960,6 +1963,36 @@ function adminPage(kind) {
           <div id="admin-content"><div class="empty-state">Loading admin data...</div></div>
         </div>
       </section>
+      <div id="mobile-chat-modal" class="mobile-chat-modal" aria-hidden="true">
+        <div class="mobile-chat-modal-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-chat-title">
+          <div class="mobile-chat-head">
+            <button class="icon-btn mobile-chat-close" id="mobile-chat-close" type="button" aria-label="Close conversation">${icons.chevron}</button>
+            <div class="mobile-chat-head-copy">
+              <strong id="mobile-chat-title">Conversation</strong>
+              <span id="mobile-chat-subtitle">Select a thread</span>
+            </div>
+            <div class="mobile-chat-head-actions">
+              <span class="status-pill open" id="mobile-chat-status">OPEN</span>
+              <button class="icon-btn mobile-chat-menu" id="mobile-chat-menu" type="button" aria-label="More actions">${icons.menu}</button>
+            </div>
+          </div>
+          <div class="mobile-chat-toolbar">
+            <button class="button secondary small" type="button">${icons.inbox}<span>New ticket</span></button>
+            <button class="button secondary small" type="button">${icons.mail}<span>Email</span></button>
+            <button class="button secondary small" type="button">${icons.reply}<span>Transcript</span></button>
+          </div>
+          <div class="mobile-chat-body">
+            <div id="mobile-chat-messages" class="mobile-chat-messages">
+              <div class="empty-state">Tap a conversation to open it here.</div>
+            </div>
+            <div id="mobile-chat-note" class="mobile-chat-note" aria-live="polite"></div>
+          </div>
+          <form id="mobile-chat-form" class="mobile-chat-form">
+            <textarea id="mobile-chat-input" name="message" rows="2" placeholder="Type reply..." autocomplete="off"></textarea>
+            <button class="button" type="submit">${icons.reply}Send</button>
+          </form>
+        </div>
+      </div>
       ${adminBottomNav(active)}
     </main>`;
 }
@@ -3138,7 +3171,7 @@ function adminChatList(rows, selectedId) {
                     .join("")
                     .toUpperCase();
                   return `
-                    <button class="admin-chat-list-item ${row.id === selectedId ? "active" : ""}" type="button" data-live-thread="${row.id}">
+                    <button class="admin-chat-list-item ${row.id === selectedId ? "active" : ""}" type="button" data-live-thread="${row.id}" data-thread-id="${row.id}">
                       <span class="admin-chat-avatar tone-${(index % 4) + 1}">${escapeHtml(initials || "V")}</span>
                       <span class="admin-chat-copy">
                         <strong>${escapeHtml(visitorName)}</strong>
@@ -3632,14 +3665,179 @@ function adminLiveDashboard(rows, selectedId, stats = {}) {
     </div>`;
 }
 
+function renderMobileChatMessages(thread) {
+  const messages = thread.messages || [];
+  if (!messages.length) return `<div class="empty-state">No chat messages yet.</div>`;
+  return messages
+    .map(
+      (message) => `
+      <div class="live-msg ${message.from === "visitor" ? "visitor" : "agent"}">
+        <span>${message.from === "visitor" ? escapeHtml(thread.visitor?.name || "Visitor") : escapeHtml(message.name || "Support Team")}</span>
+        <p>${escapeHtml(message.text || "")}</p>
+        <small>${formatDate(message.createdAt)}</small>
+      </div>`
+    )
+    .join("");
+}
+
+function syncMobileChatModalVisibility(visible) {
+  const modal = document.getElementById("mobile-chat-modal");
+  if (!modal) return;
+  modal.classList.toggle("open", visible);
+  modal.setAttribute("aria-hidden", visible ? "false" : "true");
+  document.body.classList.toggle("modal-open", visible);
+  document.body.style.overflow = visible ? "hidden" : "";
+}
+
+function closeMobileChatModal({ refresh = true, restoreFocus = true } = {}) {
+  const modal = document.getElementById("mobile-chat-modal");
+  const content = document.getElementById("admin-content");
+  if (!modal) return;
+  mobileChatModalOpenThreadId = "";
+  syncMobileChatModalVisibility(false);
+  modal.querySelector("#mobile-chat-note").textContent = "";
+  if (mobileChatModalKeyHandler) {
+    document.removeEventListener("keydown", mobileChatModalKeyHandler, true);
+    mobileChatModalKeyHandler = null;
+  }
+  delete content?.dataset.selectedThread;
+  if (refresh && content && window.location.pathname === "/admin/live") {
+    loadAdmin("live", content);
+  }
+  if (restoreFocus && mobileChatModalLastFocus && typeof mobileChatModalLastFocus.focus === "function") {
+    mobileChatModalLastFocus.focus();
+  }
+  mobileChatModalLastFocus = null;
+}
+
+function bindMobileChatModal() {
+  const modal = document.getElementById("mobile-chat-modal");
+  if (!modal || modal.dataset.bound === "1") return;
+  modal.dataset.bound = "1";
+
+  const closeBtn = document.getElementById("mobile-chat-close");
+  const form = document.getElementById("mobile-chat-form");
+  const input = document.getElementById("mobile-chat-input");
+  const note = document.getElementById("mobile-chat-note");
+
+  const closeHandler = () => closeMobileChatModal();
+  closeBtn?.addEventListener("click", closeHandler);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeMobileChatModal();
+  });
+
+  if (mobileChatModalKeyHandler) {
+    document.removeEventListener("keydown", mobileChatModalKeyHandler, true);
+  }
+  mobileChatModalKeyHandler = (event) => {
+    if (!modal.classList.contains("open")) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMobileChatModal();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusables = modal.querySelectorAll('button, [href], textarea, input, select, [tabindex]:not([tabindex="-1"])');
+    const visible = Array.from(focusables).filter((item) => !item.disabled && item.offsetParent !== null);
+    if (!visible.length) return;
+    const first = visible[0];
+    const last = visible[visible.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  document.addEventListener("keydown", mobileChatModalKeyHandler, true);
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!mobileChatModalOpenThreadId) return;
+    const message = input?.value.trim();
+    if (!message) return;
+    const content = document.getElementById("admin-content");
+    const threadId = mobileChatModalOpenThreadId;
+    const previousValue = input.value;
+    input.value = "";
+    try {
+      note.textContent = "";
+      await adminPost("/api/admin/live/reply", { id: threadId, message, agentName: "Support Team" });
+      if (content && window.location.pathname === "/admin/live") {
+        loadAdmin("live", content);
+      }
+      if (mobileChatModalOpenThreadId === threadId) {
+        await openMobileChatModal(threadId, { quiet: true, keepFocus: true });
+      }
+    } catch (error) {
+      if (note) note.textContent = error.message || "Message could not be sent.";
+      if (input) input.value = previousValue;
+    }
+  });
+
+  input?.addEventListener("input", () => {
+    if (note) note.textContent = "";
+  });
+}
+
+async function openMobileChatModal(threadId, options = {}) {
+  if (!threadId || !isAdminMobileLayout()) {
+    return loadAdminLiveThread(threadId, options);
+  }
+
+  const modal = document.getElementById("mobile-chat-modal");
+  const title = document.getElementById("mobile-chat-title");
+  const subtitle = document.getElementById("mobile-chat-subtitle");
+  const status = document.getElementById("mobile-chat-status");
+  const messages = document.getElementById("mobile-chat-messages");
+  const input = document.getElementById("mobile-chat-input");
+  const note = document.getElementById("mobile-chat-note");
+  if (!modal || !title || !subtitle || !status || !messages || !input) return;
+
+  if (!options.keepFocus) {
+    mobileChatModalLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  mobileChatModalOpenThreadId = threadId;
+  const requestedThreadId = threadId;
+  const content = document.getElementById("admin-content");
+  if (content) content.dataset.selectedThread = threadId;
+
+  try {
+    syncMobileChatModalVisibility(true);
+    if (note) note.textContent = options.quiet ? note.textContent : "Loading conversation...";
+    const json = await adminFetch(`/api/admin/live/thread?id=${encodeURIComponent(threadId)}`);
+    if (mobileChatModalOpenThreadId !== requestedThreadId) return;
+    const thread = json.thread;
+    const visitorName = thread.visitor?.name || `Visitor ${String(thread.ticketId || thread.id).slice(-6)}`;
+    const statusValue = String(thread.status || "open").toUpperCase();
+    title.textContent = visitorName;
+    subtitle.textContent = thread.ticketId ? `Ticket ${thread.ticketId}` : "Live conversation";
+    status.textContent = statusValue;
+    status.classList.toggle("closed", String(thread.status || "").toLowerCase() === "closed");
+    status.classList.toggle("open", String(thread.status || "open").toLowerCase() !== "closed");
+    messages.innerHTML = renderMobileChatMessages(thread);
+    messages.scrollTop = messages.scrollHeight;
+    input.value = options.draft ?? "";
+    note.textContent = "";
+    input.focus();
+  } catch (error) {
+    note.textContent = error.message || "Could not load this conversation.";
+  }
+}
+
 function bindAdminLiveInbox(content, selectedId, options = {}) {
   document.querySelectorAll("[data-live-thread]").forEach((button) => {
     button.addEventListener("click", () => {
       content.dataset.selectedThread = button.dataset.liveThread;
-      content.classList.add("chat-thread-visible");
-      content.classList.remove("chat-list-visible");
       document.querySelectorAll("[data-live-thread]").forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
+      if (isAdminMobileLayout()) {
+        openMobileChatModal(button.dataset.liveThread);
+        return;
+      }
+      content.classList.add("chat-thread-visible");
+      content.classList.remove("chat-list-visible");
       loadAdminLiveThread(button.dataset.liveThread);
     });
   });
@@ -3672,6 +3870,8 @@ function bindAdminLiveInbox(content, selectedId, options = {}) {
       loadAdmin("live", content);
     });
   }
+
+  bindMobileChatModal();
 }
 
 async function loadAdminLiveThread(threadId, options = {}) {
