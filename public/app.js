@@ -2288,6 +2288,7 @@ function bindChat() {
         { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
         { role: "bot", text: chatFollowupMessage(providerName, lead) }
       ];
+      persist();
       draw();
       window.scrollTo({ top: 0, behavior: "smooth" });
       render();
