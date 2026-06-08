@@ -1697,7 +1697,7 @@ function chatPage() {
                   <div class="field"><label>Describe Your Problem</label><textarea name="issue" required placeholder="Please describe your issue in detail...">${escapeHtml(leadData.issue || issue || "")}</textarea></div>
                 </div>
                 <input type="hidden" name="company" value="${escapeHtml(chatProvider.name)}">
-                <button class="button provider-red-button" type="submit">Start Help Chat</button>
+                <button class="button provider-red-button" type="button" id="chat-start-button">Start Help Chat</button>
                 <div class="helper ai-chat-secure">Secure &amp; encrypted connection</div>
               </form>
             </div>
@@ -2358,9 +2358,9 @@ function bindChat() {
       }
       leadForm.dataset.submitting = "0";
     };
+    const startBtn = document.getElementById("chat-start-button");
+    if (startBtn) startBtn.addEventListener("click", handleLeadSubmit);
     leadForm.addEventListener("submit", handleLeadSubmit);
-    const startBtn = leadForm.querySelector('button[type="submit"]');
-    if (startBtn) startBtn.addEventListener("click", (event) => handleLeadSubmit(event));
     return;
   }
 
