@@ -2371,7 +2371,7 @@ function bindChat() {
         if (statusEl) statusEl.textContent = "Chat started.";
       } catch (error) {
         console.error("handleLeadSubmit failed", error);
-        if (statusEl) statusEl.textContent = "Chat could not start. Please try again.";
+        if (statusEl) statusEl.textContent = `Chat could not start. ${error?.message ? error.message : "Please try again."}`;
         leadForm.dataset.submitting = "0";
       }
     };
