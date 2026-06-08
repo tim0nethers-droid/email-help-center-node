@@ -1047,7 +1047,8 @@ function isInternalPath(pathname = window.location.pathname) {
 
 function liveChatWidget() {
   if (isInternalPath()) return "";
-  if (window.location.pathname === "/ai/chat") return "";
+  if (window.location.pathname.startsWith("/ai/chat")) return "";
+  if (document.body.classList.contains("ai-chat-route")) return "";
   const provider = currentProviderFromPath();
   if (provider) {
     return `
@@ -2007,7 +2008,7 @@ function routeContent() {
 
 function render() {
   const internalPath = isInternalPath();
-  const isAiChatPath = window.location.pathname === "/ai/chat";
+  const isAiChatPath = window.location.pathname.startsWith("/ai/chat");
   document.body.classList.toggle("menu-open", mobileOpen);
   document.body.classList.toggle("admin-shell", internalPath);
   document.getElementById("app").innerHTML = internalPath
@@ -2016,6 +2017,8 @@ function render() {
   if (isAiChatPath) {
     document.body.classList.add("ai-chat-route");
     localStorage.setItem("ehc_live_chat_open", "false");
+    document.getElementById("live-chat-widget")?.remove();
+    document.querySelector(".provider-ai-chat-widget")?.remove();
   } else {
     document.body.classList.remove("ai-chat-route");
   }
@@ -2256,33 +2259,35 @@ function bindChat() {
 
   if (leadForm) {
     const handleLeadSubmit = async (event) => {
-      event.preventDefault();
-      if (leadForm.dataset.submitting === "1") return;
-      leadForm.dataset.submitting = "1";
-      const data = Object.fromEntries(new FormData(leadForm).entries());
-      const lead = {
-        name: String(data.name || "").trim(),
-        email: String(data.email || "").trim(),
-        phone: String(data.phone || "").trim(),
-        issue: String(data.issue || "").trim(),
-        message: String(data.issue || "").trim()
-      };
-      const sessionId = state.sessionId || currentLiveChatSession() || chatSessionId();
-      state = {
-        started: true,
-        leadData: lead,
-        sessionId,
-        messages: [
+      console.log("handleLeadSubmit fired");
+      try {
+        event.preventDefault();
+        if (leadForm.dataset.submitting === "1") return;
+        leadForm.dataset.submitting = "1";
+        const data = Object.fromEntries(new FormData(leadForm).entries());
+        const lead = {
+          name: String(data.name || "").trim(),
+          email: String(data.email || "").trim(),
+          phone: String(data.phone || "").trim(),
+          issue: String(data.issue || "").trim(),
+          message: String(data.issue || "").trim()
+        };
+        const sessionId = state.sessionId || currentLiveChatSession() || chatSessionId();
+        state = {
+          started: true,
+          leadData: lead,
+          sessionId,
+          messages: [
+            { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
+            { role: "bot", text: chatFollowupMessage(providerName, lead) }
+          ]
+        };
+        history = [
           { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
           { role: "bot", text: chatFollowupMessage(providerName, lead) }
-        ]
-      };
-      history = [
-        { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
-        { role: "bot", text: chatFollowupMessage(providerName, lead) }
-      ];
-      persist();
-      const liveHtml = `
+        ];
+        persist();
+        const liveHtml = `
         <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(lead.issue || issue || "")}" data-chat-started="true">
           <section class="section ai-chat-section">
             <div class="container ai-chat-start-shell ai-chat-transition-shell">
@@ -2318,45 +2323,49 @@ function bindChat() {
             </div>
           </section>
         </main>`;
-      document.getElementById("app").innerHTML = `${header()}${liveHtml}${universalSupportBand()}${footer()}`;
-      bindGlobalEvents();
-      bindPageEvents();
-      const liveWindow = document.getElementById("chat-window");
-      if (liveWindow) {
-        liveWindow.innerHTML = history
-          .map(
-            (message) =>
-              `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
-          )
-          .join("");
-        liveWindow.scrollTop = liveWindow.scrollHeight;
-      }
-      leadForm.dataset.submitting = "0";
-      try {
-        const response = await fetch("/api/live/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            name: lead.name,
-            phone: lead.phone,
-            email: lead.email,
-            company: String(data.company || providerName).trim() || providerName,
-            issue: lead.issue || issue,
-            message: lead.message || lead.issue,
-            sourcePage: window.location.href
-          })
-        });
-        if (response.ok) {
-          const json = await readApiJson(response);
-          if (json.thread?.id) {
-            state.sessionId = json.thread.id;
-            setCurrentLiveChatSession(json.thread.id);
-            persist();
+        document.getElementById("app").innerHTML = `${header()}${liveHtml}${universalSupportBand()}${footer()}`;
+        bindGlobalEvents();
+        bindPageEvents();
+        const liveWindow = document.getElementById("chat-window");
+        if (liveWindow) {
+          liveWindow.innerHTML = history
+            .map(
+              (message) =>
+                `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
+            )
+            .join("");
+          liveWindow.scrollTop = liveWindow.scrollHeight;
+        }
+        leadForm.dataset.submitting = "0";
+        try {
+          const response = await fetch("/api/live/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId,
+              name: lead.name,
+              phone: lead.phone,
+              email: lead.email,
+              company: String(data.company || providerName).trim() || providerName,
+              issue: lead.issue || issue,
+              message: lead.message || lead.issue,
+              sourcePage: window.location.href
+            })
+          });
+          if (response.ok) {
+            const json = await readApiJson(response);
+            if (json.thread?.id) {
+              state.sessionId = json.thread.id;
+              setCurrentLiveChatSession(json.thread.id);
+              persist();
+            }
           }
+        } catch (error) {
+          console.warn("Could not save live chat lead:", error);
         }
       } catch (error) {
-        console.warn("Could not save live chat lead:", error);
+        console.error("handleLeadSubmit failed", error);
+        leadForm.dataset.submitting = "0";
       }
     };
     const startBtn = document.getElementById("chat-start-button");
