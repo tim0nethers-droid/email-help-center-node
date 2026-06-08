@@ -2291,8 +2291,15 @@ function bindChat() {
       } catch (error) {
         console.warn("Could not save live chat lead:", error);
       }
-      state.started = true;
-      state.leadData = lead;
+      state = {
+        started: true,
+        leadData: lead,
+        sessionId: state.sessionId,
+        messages: [
+          { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
+          { role: "bot", text: chatFollowupMessage(providerName, lead) }
+        ]
+      };
       history = [
         { role: "bot", text: chatInitialMessage(providerName, lead) },
         { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
@@ -2300,7 +2307,7 @@ function bindChat() {
       ];
       persist();
       draw();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "auto" });
       render();
     });
     return;
