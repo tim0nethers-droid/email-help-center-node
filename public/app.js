@@ -1579,32 +1579,34 @@ function chatInitialMessage(providerName, leadData) {
   const name = (leadData?.name || "").trim() || "there";
   const issue = (leadData?.issue || "").trim() || "your Gmail issue";
   const message = (leadData?.message || "").trim();
-  return `Hi ${name}. 👋 Welcome to our independent Gmail help center. I'm an AI assistant here to help troubleshoot your issue.
+  return `Hi ${name}. Welcome to our independent ${providerName} help center. I'm an AI assistant here to help troubleshoot your issue.
 
-⚠️ Please note: We are an independent resource and not affiliated with Gmail.
+Warning: We are an independent resource and not affiliated with ${providerName}.
 
-I can see you're experiencing: ${issue}${message ? `\n\nYour message: ${message}` : ""}
+I can see you're experiencing: ${issue}${message ? `
+
+Your message: ${message}` : ""}
 
 Let me help you work through this. Could you tell me a bit more about when this issue started?`;
 }
 
 const quickReplyResponses = {
   "Yes, I've already tried that":
-    "I understand. Let's try the next step. Please check whether the issue happens on another browser, device, or internet connection.",
+    "I understand. Let's try the next step. Please check whether this issue happens on another browser, device, or internet connection.",
   "Can you explain that differently?":
-    "Of course. I'll explain it more simply. We'll check your account access, inbox settings, storage, and device setup one by one.",
+    "Of course. I'll explain it more simply. We'll check your login, inbox settings, storage, spam folder, filters, and device setup one by one.",
   "This started happening today":
-    "Thanks. If it started today, it may be related to recent password changes, browser cache, device settings, or temporary email service delays.",
+    "Thanks. If it started today, it may be related to recent password changes, browser cache, device settings, storage limits, or temporary email delays.",
   "How long will this take?":
-    "Most basic email troubleshooting steps take a few minutes. More complex account access issues may take longer and may require using Gmail's official recovery process.",
+    "Most basic email troubleshooting steps take a few minutes. More complex account access issues may require using Gmail's official recovery process.",
   "Request Callback":
-    "Please confirm your phone number. Our assistant can use this information to prepare callback guidance. This is independent guidance only, not official Gmail support."
+    "Your callback request has been received. An admin or support team member can review this request and contact you if callback handling is enabled. This is independent guidance only, not official Gmail support."
 };
 
 function quickReplyResponse(prompt, leadData) {
   const phone = (leadData?.phone || "").trim() || "your phone number";
   if (prompt === "Request Callback") {
-    return `Please confirm your phone number: ${phone}. Our assistant can use this information to prepare callback guidance. This is independent guidance only, not official Gmail support.`;
+    return `Your callback request has been received. Phone number: ${phone}. An admin or support team member can review this request and contact you if callback handling is enabled. This is independent guidance only, not official Gmail support.`;
   }
   return quickReplyResponses[prompt] || "Let's keep going step by step.";
 }
@@ -1618,24 +1620,19 @@ function chatPage() {
   const issue = new URL(window.location.href).searchParams.get("issue") || "";
   const state = readChatState(chatProvider.id);
   const chatStarted = Boolean(state.started);
-  const leadData = state.leadData || { name: "", phone: "", issue: issue || "", message: "" };
+  const leadData = state.leadData || { name: "", email: "", phone: "", issue: issue || "", message: "" };
+  const chatTitle = `${chatProvider.name} Help Chat`;
+  const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
   const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
   return chatStarted
     ? `
     <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(leadData.issue || issue || "")}" data-chat-started="true">
-      <section class="ai-chat-hero">
-        <div class="container">
-          <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
-          <span class="badge">${icons.bot}${escapeHtml(chatProvider.name)} Help (Independent)</span>
-          <h1>${escapeHtml(chatProvider.name)} Help</h1>
-          <p>Get guided troubleshooting from our independent AI assistant. Do not share passwords, OTPs, recovery codes, payment details, or private mailbox content.</p>
-        </div>
-      </section>
       <section class="section ai-chat-section">
         <div class="container ai-chat-shell">
           <div class="card ai-chat-card">
             <div class="ai-chat-head">
               <div>
+                <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
                 <strong>${escapeHtml(chatProvider.name)} Help</strong>
                 <span>Independent</span>
                 <span><i></i> Online now</span>
@@ -1655,11 +1652,6 @@ function chatPage() {
               <button class="button" type="submit">${icons.reply}Send</button>
             </form>
           </div>
-          <aside class="card ai-chat-side"><div class="card-body">
-            <h3>Independent resource</h3>
-            <p>This chat provides educational troubleshooting steps only. It is not connected with Google, Gmail, or any email service provider.</p>
-            <div class="notice" style="margin-top:16px">Never send passwords, OTPs, or recovery codes in chat.</div>
-          </div></aside>
         </div>
       </section>
     </main>`
@@ -1669,19 +1661,31 @@ function chatPage() {
         <div class="container ai-chat-start-shell">
           <div class="card ai-chat-start-card">
             <div class="card-body">
-              <span class="badge">${icons.bot}Independent AI-powered support assistant</span>
-              <h1>Gmail Help Chat</h1>
-              <p class="meta-line">Independent resource - not affiliated with Gmail</p>
+              <div class="ai-chat-start-top">
+                <div class="ai-chat-start-icon">${providerLogo ? `<img src="${escapeHtml(providerLogo)}" alt="${escapeHtml(chatProvider.name)}">` : icons.bot}</div>
+                <div class="ai-chat-start-copy">
+                  <h1>${escapeHtml(chatTitle)}</h1>
+                  <p class="meta-line">Independent AI-powered support assistant</p>
+                  <p class="meta-line small">Not affiliated with ${escapeHtml(chatProvider.name)}</p>
+                  <div class="ai-chat-status"><i></i> AI assistant online</div>
+                </div>
+              </div>
               <form class="form ai-chat-start-form" id="chat-lead-form">
-                <div class="form-row">
+                <div class="form-row single">
                   <div class="field"><label>Full Name</label><input name="name" required placeholder="Full Name" value="${escapeHtml(leadData.name || "")}"></div>
+                </div>
+                <div class="form-row single">
+                  <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(leadData.email || "")}"></div>
+                </div>
+                <div class="form-row single">
                   <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required placeholder="Phone Number" value="${escapeHtml(leadData.phone || "")}"></div>
                 </div>
-                <div class="form-row">
-                  <div class="field"><label>Issue / Problem</label><input name="issue" required placeholder="Issue / Problem" value="${escapeHtml(leadData.issue || issue || "")}"></div>
-                  <div class="field"><label>Message</label><textarea name="message" required placeholder="Message">${escapeHtml(leadData.message || "")}</textarea></div>
+                <div class="form-row single">
+                  <div class="field"><label>Describe Your Problem</label><textarea name="issue" required placeholder="Please describe your issue in detail...">${escapeHtml(leadData.issue || issue || "")}</textarea></div>
                 </div>
+                <input type="hidden" name="company" value="${escapeHtml(chatProvider.name)}">
                 <button class="button provider-red-button" type="submit">Start Help Chat</button>
+                <div class="helper ai-chat-secure">Secure &amp; encrypted connection</div>
               </form>
             </div>
           </div>
@@ -1689,6 +1693,7 @@ function chatPage() {
       </section>
     </main>`;
 }
+
 
 function inboxCategorizerPage() {
   return toolPage(
@@ -2187,21 +2192,33 @@ function bindChat() {
   const page = document.querySelector(".ai-chat-page");
   const providerName = page?.dataset.chatProvider || "Email Help";
   const issue = page?.dataset.chatIssue || "";
-  const providerDomain = providerChatDomain({ id: chatProviderFromQuery().id }) || "gmail.com";
+  const providerDomain = providerChatDomain(chatProviderFromQuery()) || "gmail.com";
   const stateKey = chatStateKey(providerDomain);
-  const state = readLocalJson(stateKey, { started: false, leadData: null, messages: [] });
-  const history = Array.isArray(state.messages) ? state.messages : [];
+  const initialState = readLocalJson(stateKey, { started: false, leadData: null, messages: [], sessionId: "" });
+  let state = {
+    started: Boolean(initialState.started),
+    leadData: initialState.leadData || null,
+    messages: Array.isArray(initialState.messages) ? initialState.messages : [],
+    sessionId: initialState.sessionId || currentLiveChatSession() || ""
+  };
+  let history = state.messages.slice();
 
   if (!history.length && state.started && state.leadData) {
     history.push({ role: "bot", text: chatInitialMessage(providerName, state.leadData) });
   }
 
+  const persist = () => {
+    state.messages = history.slice(-30);
+    writeChatState(providerDomain, state);
+  };
+
   const draw = () => {
+    if (!windowEl) return;
     windowEl.innerHTML = history
       .map((message) => `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text)}</div></div>`)
       .join("");
     windowEl.scrollTop = windowEl.scrollHeight;
-    writeChatState(providerDomain, { started: true, leadData: state.leadData, messages: history.slice(-30) });
+    persist();
   };
 
   const input = document.getElementById("chat-input");
@@ -2215,34 +2232,66 @@ function bindChat() {
   }
 
   if (leadForm) {
-    leadForm.addEventListener("submit", (event) => {
+    leadForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(leadForm).entries());
-      const nextState = {
-        started: true,
-        leadData: {
-          name: String(data.name || "").trim(),
-          phone: String(data.phone || "").trim(),
-          issue: String(data.issue || "").trim(),
-          message: String(data.message || "").trim()
-        },
-        messages: [
-          { role: "bot", text: chatInitialMessage(providerName, data) }
-        ]
+      const lead = {
+        name: String(data.name || "").trim(),
+        email: String(data.email || "").trim(),
+        phone: String(data.phone || "").trim(),
+        issue: String(data.issue || "").trim(),
+        message: String(data.issue || "").trim()
       };
-      writeChatState(providerDomain, nextState);
+      const sessionId = state.sessionId || currentLiveChatSession() || chatSessionId();
+      try {
+        const response = await fetch("/api/live/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            name: lead.name,
+            phone: lead.phone,
+            email: lead.email,
+            company: String(data.company || providerName).trim() || providerName,
+            issue: lead.issue || issue,
+            message: lead.message || lead.issue,
+            sourcePage: window.location.href
+          })
+        });
+        if (response.ok) {
+          const json = await readApiJson(response);
+          if (json.thread?.id) {
+            state.sessionId = json.thread.id;
+            setCurrentLiveChatSession(json.thread.id);
+          }
+        }
+      } catch (error) {
+        console.warn("Could not save live chat lead:", error);
+      }
+      state.started = true;
+      state.leadData = lead;
+      history = [{ role: "bot", text: chatInitialMessage(providerName, lead) }];
+      draw();
       render();
     });
     return;
   }
 
   async function sendMessage(text) {
+    if (!text) return;
     history.push({ role: "user", text });
     const leadData = state.leadData || {};
     const reply = quickReplyResponses[text] ? quickReplyResponse(text, leadData) : freeTextResponse(leadData);
     history.push({ role: "bot", text: reply });
-    writeChatState(providerDomain, { started: true, leadData, messages: history.slice(-30) });
+    persist();
     draw();
+    if (state.sessionId) {
+      fetch("/api/live/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: state.sessionId, message: text })
+      }).catch(() => {});
+    }
   }
 
   form.addEventListener("submit", (event) => {
@@ -2257,6 +2306,7 @@ function bindChat() {
     button.addEventListener("click", () => sendMessage(button.dataset.prompt));
   });
 }
+
 
 function bindTools() {
   const categorizer = document.getElementById("categorizer-form");
