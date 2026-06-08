@@ -13,6 +13,7 @@ const icons = {
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.73l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg>',
   menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>'
 };
@@ -674,6 +675,30 @@ function navigate(path) {
 }
 
 document.addEventListener("click", (event) => {
+  const showArticlesButton = event.target.closest("[data-provider-show-articles]");
+  if (showArticlesButton) {
+    event.preventDefault();
+    const tabs = document.querySelector("[data-provider-tabs]");
+    if (tabs) {
+      tabs.querySelectorAll("[data-provider-tab]").forEach((item) => item.classList.toggle("active", item.dataset.providerTab === "articles"));
+      tabs.querySelectorAll("[data-provider-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.providerPanel === "articles"));
+      tabs.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    return;
+  }
+
+  const providerFormButton = event.target.closest("[data-provider-scroll-form]");
+  if (providerFormButton) {
+    event.preventDefault();
+    const tabs = document.querySelector("[data-provider-tabs]");
+    if (tabs) {
+      tabs.querySelectorAll("[data-provider-tab]").forEach((item) => item.classList.toggle("active", item.dataset.providerTab === "ticket"));
+      tabs.querySelectorAll("[data-provider-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.providerPanel === "ticket"));
+    }
+    document.getElementById("provider-support-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
   const link = event.target.closest("a[data-link]");
   if (!link) return;
   const href = link.getAttribute("href");
@@ -787,7 +812,20 @@ function universalSupportBand() {
 function currentProviderFromPath() {
   const parts = window.location.pathname.split("/").filter(Boolean);
   if (parts[0] !== "provider" || !parts[1]) return null;
-  return providers.find((item) => item.id === parts[1] || item.slug === parts[1]) || null;
+  return findProviderByRoute(parts[1]);
+}
+
+const providerRouteAliases = {
+  proton: "protonmail",
+  comcast: "xfinity",
+  hotmail: "outlook",
+  apple: "icloud"
+};
+
+function findProviderByRoute(value = "") {
+  const key = value.toLowerCase();
+  const normalized = providerRouteAliases[key] || key;
+  return providers.find((item) => item.id === normalized || item.slug === key || item.slug === normalized) || null;
 }
 
 function providerSelectOptions(selectedName = "") {
@@ -1156,137 +1194,71 @@ function providersPage() {
     </main>`;
 }
 
-function gmailProviderPage(provider) {
-  const gmailGuides = [
-    ["Gmail setup guide", "Set up Gmail on web, desktop mail apps, and common devices with safe settings.", "settings"],
-    ["Reset Gmail password", "Learn the usual steps for password reset and account recovery pages.", "lock"],
-    ["Gmail not receiving emails", "Check spam, filters, forwarding, storage, blocked senders, and delivery delays.", "inbox"],
-    ["Gmail account security tips", "Review sign-in activity, recovery info, app passwords, and 2-step verification.", "shield"],
-    ["Gmail mobile setup", "Add Gmail to Android, iPhone, and mail apps while avoiding unsafe shortcuts.", "phone"],
-    ["Gmail storage full", "Find large messages, clean attachments, and understand Google storage basics.", "trash"],
-    ["Gmail forwarding setup", "Review forwarding, filters, POP/IMAP, and inbox organization options.", "reply"],
-    ["Gmail attachment issues", "Fix common upload, download, file size, and blocked attachment problems.", "paperclip"]
+function providerPage(provider) {
+  const meta = providerGuideMeta(provider);
+  const safeName = escapeHtml(meta.shortName);
+  const brandName = escapeHtml(meta.brandName);
+  const sourcePage = escapeHtml(`${window.location.pathname}${window.location.search}`);
+  const initialTab = new URL(window.location.href).searchParams.get("section") === "articles" ? "articles" : "troubleshooter";
+  const issueCards = [
+    ["Login & Password", `Sign-in, password reset, and access guidance for ${meta.shortName}.`, "lock"],
+    [`${meta.shortName} Not Receiving Emails`, "Check filters, blocked senders, spam folders, forwarding, and storage.", "inbox"],
+    ["Account Security", "Review suspicious activity, recovery options, app access, and safer sign-in habits.", "shield"],
+    [`${meta.shortName} Setup`, "Set up mailbox access, IMAP/SMTP basics, and common email app settings.", "settings"],
+    ["Mobile Setup", `Add ${meta.shortName} to phone mail apps and fix sync problems.`, "phone"],
+    ["Storage Full", "Find storage limits, large attachments, trash, and inbox cleanup steps.", "trash"],
+    ["Attachment Issues", "Troubleshoot upload, download, file size, and blocked attachment problems.", "paperclip"],
+    ["Email Forwarding", "Review forwarding rules, filters, POP/IMAP, and delivery paths.", "reply"]
   ];
+  const articles = [
+    [`How to set up ${meta.shortName} on mobile`, `A simple mobile setup guide for ${meta.shortName} on common devices.`, "phone"],
+    [`Why ${meta.shortName} is not receiving emails`, "Understand the most common inbox delivery causes and checks.", "inbox"],
+    [`How to manage ${meta.shortName} storage`, "Clean mailbox space and understand storage-related delivery issues.", "trash"],
+    [`How to improve ${meta.shortName} account security`, "Review practical security settings and safer account habits.", "shield"],
+    [`How to set up email forwarding in ${meta.shortName}`, "Check forwarding, filters, and copy-to-inbox behavior.", "reply"],
+    [`How to fix ${meta.shortName} attachment issues`, "Fix common attachment upload, download, and file-size problems.", "paperclip"]
+  ];
+  const quickLinks = ["Login & Password", `${meta.shortName} Setup`, "Not Receiving Emails", "Storage Full", "Account Security", "Mobile Setup"];
   const faqRows = [
-    ["Why is my Gmail not receiving emails?", "Common causes include spam placement, filters, forwarding rules, blocked senders, storage limits, or temporary delivery delays."],
-    ["How do I reset my Gmail password?", "Use Google's account recovery page from a trusted browser and verify the recovery email or phone already on the account."],
-    ["How do I set up Gmail on my phone?", "Use the Gmail app when possible. For another mail app, check IMAP/SMTP settings and app-password requirements if 2-step verification is enabled."],
-    ["What should I do if my Gmail storage is full?", "Review large messages and attachments, empty trash/spam after checking them, and confirm how Google storage is shared across services."],
-    ["Is this official Gmail support?", "No. This website provides independent educational guides only and is not affiliated with Google or Gmail."]
+    [`Is this connected with ${meta.shortName}?`, `No. This is an independent educational resource and is not affiliated with ${meta.brandName}.`],
+    [`Why is ${meta.shortName} not receiving emails?`, "Common causes include filters, spam placement, forwarding rules, blocked senders, full storage, or temporary service delays."],
+    [`How do I set up ${meta.shortName} on my phone?`, "Use the provider's mail app when available, or check IMAP/SMTP settings before adding the account to another mail app."],
+    [`What should I do if my ${meta.shortName} storage is full?`, "Review large messages and attachments, empty trash after checking it, and confirm any storage shared with related services."],
+    [`Can you recover my ${meta.shortName} account?`, `No. For account recovery, use the official ${meta.brandName} recovery process and keep recovery codes private.`]
   ];
   return `
-    <main id="main" class="page gmail-page">
-      <section class="gmail-hero">
-        <div class="container gmail-hero-grid">
-          <div>
-            <span class="badge">${icons.shield}Independent Email Guide</span>
-            <h1>Gmail Help Guides</h1>
-            <p class="gmail-hero-subtitle">Find simple Gmail setup, inbox, password, mobile, and troubleshooting guides.</p>
-            <div class="notice info gmail-disclaimer">We are an independent educational resource and are not affiliated with Google or Gmail.</div>
-            <div class="page-actions">
-              <button class="button" type="button" data-gmail-help>Get Gmail Help</button>
+    <main id="main" class="page provider-guide-page" style="--provider-color:${escapeHtml(meta.color)}">
+      <section class="provider-guide-hero">
+        <div class="container">
+          <span class="badge">${icons.shield}Independent Email Guide</span>
+          <div class="provider-guide-banner">
+            <div class="provider-guide-title">
+              ${logo(provider)}
+              <div>
+                <h1>${safeName} Help Guide</h1>
+                <p>Independent resource - not affiliated with ${brandName}</p>
+              </div>
+            </div>
+            <div class="provider-guide-actions">
+              <a class="button" href="${providerUrl(provider)}?section=articles" data-link>${safeName} Help Articles</a>
               <a class="button secondary" href="/providers" data-link>All Providers</a>
             </div>
           </div>
-          <aside class="gmail-provider-card">
-            <span class="gmail-logo-wrap">${logo(provider)}</span>
+          <div class="provider-guide-intro">
             <div>
-              <p class="section-kicker">Provider</p>
-              <h2>Google Mail / Gmail</h2>
-              <p>Independent tutorials for Gmail setup, inbox delivery, account safety, mobile access, storage, and attachment troubleshooting.</p>
+              <h2>${safeName} Help Guides</h2>
+              <p>Find simple ${safeName} setup, inbox, password, mobile, storage, and troubleshooting guides.</p>
+              <div class="notice info">We are an independent educational resource and are not affiliated with ${brandName}.</div>
             </div>
-            <button class="button full" type="button" data-gmail-help>Get Gmail Help</button>
-          </aside>
-        </div>
-      </section>
-
-      <section class="section gmail-guides-section">
-        <div class="container">
-          <div class="section-heading align-left">
-            <p class="section-kicker">Gmail learning center</p>
-            <h2>Popular Gmail troubleshooting guides</h2>
-            <p>Choose a topic below, then submit a request if you need help organizing your next steps.</p>
-          </div>
-          <div class="gmail-guide-grid">
-            ${gmailGuides
-              .map(
-                ([title, desc, iconName]) => `
-                <article class="gmail-guide-card">
-                  ${icon(iconName)}
-                  <h3>${title}</h3>
-                  <p>${desc}</p>
-                  <button class="button secondary small" type="button" data-gmail-help>Read guide</button>
-                </article>`
-              )
-              .join("")}
-          </div>
-        </div>
-      </section>
-
-      <section class="section gmail-form-section" id="gmail-support-form">
-        <div class="container gmail-form-grid">
-          <div>
-            <p class="section-kicker">Request help</p>
-            <h2>Submit a Gmail guide request</h2>
-            <p>Share the basic issue and an admin can review it from Support Forms. Do not include passwords, OTPs, recovery codes, or private mailbox content.</p>
-            <div class="notice gmail-footer-disclaimer">This website provides independent educational guides only. It is not affiliated with, endorsed by, or connected to Google, Gmail, or Alphabet Inc.</div>
-          </div>
-          <div class="card gmail-form-card"><div class="card-body">
-            <form class="form provider-ticket-form" data-provider-name="Gmail">
-              <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
-              <input type="hidden" name="subject" value="Gmail educational help request">
-              <div class="form-row">
-                <div class="field"><label>Full name</label><input name="name" required placeholder="Your full name"></div>
-                <div class="field"><label>Email address</label><input name="email" type="email" required placeholder="you@example.com"></div>
+            <aside class="provider-info-card">
+              ${logo(provider)}
+              <div>
+                <p class="section-kicker">Provider</p>
+                <h3>${escapeHtml(meta.displayName)}</h3>
+                <p>${escapeHtml(provider.description)}</p>
               </div>
-              <div class="form-row">
-                <div class="field"><label>Phone number</label><input name="phone" inputmode="tel" placeholder="Phone number"></div>
-                <div class="field"><label>Problem type</label><select name="category" required><option value="">Select problem type</option><option>Gmail setup tutorial</option><option>Gmail password guidance</option><option>Gmail not receiving emails</option><option>Gmail mobile setup</option><option>Gmail storage full</option><option>Gmail attachment issues</option><option>Gmail security tips</option></select></div>
-              </div>
-              <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the Gmail issue. Do not include passwords, OTPs, or recovery codes."></textarea></div>
-              <button class="button" type="submit">${icons.reply}Submit Request</button>
-            </form>
-            <div class="provider-ticket-status" style="margin-top:16px"></div>
-          </div></div>
-        </div>
-      </section>
-
-      <section class="section gmail-faq-section">
-        <div class="container">
-          <div class="section-heading">
-            <p class="section-kicker">FAQ</p>
-            <h2>Gmail guide questions</h2>
-          </div>
-          <div class="faq-list gmail-faq-list">
-            ${faqRows
-              .map(
-                ([question, answer]) => `
-                <div class="faq-item">
-                  <button class="faq-toggle" type="button">${question}</button>
-                  <div class="answer">${answer}</div>
-                </div>`
-              )
-              .join("")}
-          </div>
-        </div>
-      </section>
-    </main>`;
-}
-
-function providerPage(provider) {
-  if (provider.id === "gmail") return gmailProviderPage(provider);
-  const quickLinks = ["Login & Password", "Account Setup", "Sending/Receiving", "Security & Spam", "Account Recovery"];
-  const visibleTopics = topics.slice(0, 16);
-  return `
-    <main id="main" class="page">
-      <section class="page-hero">
-        <div class="container">
-          <div class="page-actions"><a class="button secondary" href="/providers" data-link>All Providers</a></div>
-          <div style="display:flex;align-items:center;gap:16px;margin-top:18px">${logo(provider)}<div><h1>${provider.name} Help Guide</h1><p>${provider.description}</p></div></div>
-          <div class="page-actions">
-            <a class="button" href="${provider.officialUrl}" target="_blank" rel="noopener">${icons.external}Official Mail</a>
-            <a class="button secondary" href="${provider.supportUrl}" target="_blank" rel="noopener">${icons.external}Official Support</a>
-            <a class="button secondary" href="/ai/chat" data-link>${icons.bot}Ask AI Chat</a>
+              <button class="button full" type="button" data-provider-scroll-form>Get ${safeName} Help</button>
+            </aside>
           </div>
         </div>
       </section>
@@ -1296,32 +1268,33 @@ function providerPage(provider) {
             <div class="notice">Independent resource, not affiliated with ${provider.name}. We cannot access your account, reset passwords, or provide official support.</div>
             <div class="provider-tabs" data-provider-tabs>
               <div class="provider-tablist" role="tablist" aria-label="${provider.name} help sections">
-                <button class="provider-tab active" type="button" data-provider-tab="troubleshooter">Troubleshooter</button>
-                <button class="provider-tab" type="button" data-provider-tab="articles">Help Articles</button>
+                <button class="provider-tab ${initialTab === "troubleshooter" ? "active" : ""}" type="button" data-provider-tab="troubleshooter">Troubleshooter</button>
+                <button class="provider-tab ${initialTab === "articles" ? "active" : ""}" type="button" data-provider-tab="articles">Help Articles</button>
                 <button class="provider-tab" type="button" data-provider-tab="ticket">Submit Ticket</button>
               </div>
-              <section class="provider-tab-panel active" data-provider-panel="troubleshooter">
+              <section class="provider-tab-panel ${initialTab === "troubleshooter" ? "active" : ""}" data-provider-panel="troubleshooter">
                 <div class="support-callout provider-callout">
                   <span class="brand-mark">${icons.bot}</span>
                   <div>
                     <h2>Need help faster? Chat with our team</h2>
-                    <p>Get guidance from our independent support assistant for ${provider.name} issues.</p>
+                    <p>Get guidance from our independent support assistant.</p>
                   </div>
-                  <button class="button" type="button" data-open-live-chat>Start Chat Now</button>
+                  <button class="button" type="button" data-provider-scroll-form>Start Chat Now</button>
                 </div>
                 <div class="notice info">Or select your issue below for step-by-step guidance.</div>
                 <div class="card"><div class="card-body">
                   <h2>What are you having trouble with?</h2>
                   <p class="meta-line">Select your issue for step-by-step solutions.</p>
                   <div class="provider-issue-grid">
-                    ${visibleTopics
+                    ${issueCards
                       .map(
-                        (topicItem) => `
-                        <a class="issue-card" href="${articleUrl(provider, topicItem)}" data-link>
-                          ${icon(topicItem.icon)}
-                          <h3>${topicItem.title}</h3>
-                          <p>${topicItem.desc}</p>
-                        </a>`
+                        ([title, desc, iconName]) => `
+                        <article class="issue-card">
+                          ${icon(iconName)}
+                          <h3>${escapeHtml(title)}</h3>
+                          <p>${escapeHtml(desc)}</p>
+                          <button class="button secondary small" type="button" data-provider-scroll-form>View guide</button>
+                        </article>`
                       )
                       .join("")}
                   </div>
@@ -1332,38 +1305,42 @@ function providerPage(provider) {
                     <h2>Can't find your issue?</h2>
                     <p>Chat with our assistant.</p>
                   </div>
-                  <button class="button secondary" type="button" data-open-live-chat>Start Chat</button>
+                  <button class="button secondary" type="button" data-provider-scroll-form>Start Chat</button>
                 </div>
               </section>
-              <section class="provider-tab-panel" data-provider-panel="articles">
+              <section class="provider-tab-panel ${initialTab === "articles" ? "active" : ""}" data-provider-panel="articles">
                 <div class="card"><div class="card-body">
-                  <h2>Popular ${provider.name} Articles</h2>
-                  <div class="grid two">${visibleTopics
+                  <h2>${safeName} Help Articles</h2>
+                  <div class="provider-article-grid">${articles
                     .map(
-                      (topicItem) => `<a class="category-item" href="${articleUrl(provider, topicItem)}" data-link><span>${topicItem.title}</span><span>${icons.external}</span></a>`
+                      ([title, desc, iconName]) => `
+                      <article class="provider-article-card">
+                        ${icon(iconName)}
+                        <h3>${escapeHtml(title)}</h3>
+                        <p>${escapeHtml(desc)}</p>
+                        <button class="button secondary small" type="button" data-provider-scroll-form>Get help</button>
+                      </article>`
                     )
                     .join("")}</div>
                 </div></div>
               </section>
               <section class="provider-tab-panel" data-provider-panel="ticket">
-                <div class="card"><div class="card-body">
-                  <h2>Submit ${provider.name} Support Ticket</h2>
-                  <p class="meta-line">This goes to Admin Panel > Support Forms and generates a ticket ID.</p>
-                  <form class="form provider-ticket-form" data-provider-name="${escapeHtml(provider.name)}">
-                    <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
+                <div class="card provider-form-card" id="provider-support-form"><div class="card-body">
+                  <h2>Submit a ${safeName} Help Request</h2>
+                  <p class="meta-line">Tell us about your issue and our independent assistant will guide you.</p>
+                  <form class="form provider-ticket-form" data-provider-name="${escapeHtml(meta.shortName)}">
+                    <input type="hidden" name="sourcePage" value="${sourcePage}">
+                    <input type="hidden" name="subject" value="${safeName} help request">
                     <div class="form-row">
-                      <div class="field"><label>Name</label><input name="name" required placeholder="Your name"></div>
-                      <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number"></div>
+                      <div class="field"><label>Full Name</label><input name="name" required placeholder="Your full name"></div>
+                      <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com"></div>
                     </div>
                     <div class="form-row">
-                      <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com"></div>
-                      <div class="field"><label>Company / Provider</label><select name="category"><option>${provider.name}</option><option>Email troubleshooting</option><option>Account setup</option><option>Sending/Receiving</option><option>Security</option></select></div>
+                      <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" placeholder="Phone number"></div>
+                      <div class="field"><label>Problem Type</label><select name="category" required><option value="">Select problem type</option><option>Login problem</option><option>Password reset guide</option><option>Not receiving emails</option><option>Email setup</option><option>Storage full</option><option>Account security</option><option>Other issue</option></select></div>
                     </div>
-                    <div class="form-row single">
-                      <div class="field"><label>Subject</label><input name="subject" required value="${provider.name} support request"></div>
-                    </div>
-                    <div class="field"><label>Issue</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes."></textarea></div>
-                    <button class="button" type="submit">${icons.reply}Submit Ticket</button>
+                    <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes."></textarea></div>
+                    <button class="button" type="submit">${icons.reply}Submit Request</button>
                   </form>
                   <div class="provider-ticket-status" style="margin-top:16px"></div>
                 </div></div>
@@ -1374,35 +1351,72 @@ function providerPage(provider) {
             <div class="card support-card provider-help-card"><div class="card-body">
               ${icon("bot")}
               <h3>Need Help Now?</h3>
-              <p>Start live chat for immediate help with ${provider.name} issues.</p>
-              <button class="button full" type="button" data-open-live-chat>Start Live Chat</button>
-              <small>Instant - Free - Independent resource, not affiliated with ${provider.name}</small>
+              <p>Chat with our AI-powered support assistant for immediate help with your ${safeName} issues.</p>
+              <button class="button full" type="button" data-provider-scroll-form>Start Live Chat</button>
+              <small>Instant - Free - Independent resource, not affiliated with ${safeName}</small>
             </div></div>
             <div class="card"><div class="card-body">
               <h3>Quick Links</h3>
               <div class="category-list">${quickLinks
-                .map((label) => `<a class="category-item" href="${providerUrl(provider)}" data-link><span>${label}</span><span>${icons.external}</span></a>`)
+                .map((label) => `<button class="category-item button-reset" type="button" data-provider-scroll-form><span>${escapeHtml(label)}</span><span>${icons.chevron}</span></button>`)
                 .join("")}</div>
             </div></div>
             <div class="card"><div class="card-body">
-              <h3>Server Settings</h3>
-              ${settingsTable(provider)}
-            </div></div>
-            <div class="card"><div class="card-body">
-              <h3>Official Links</h3>
-              <p class="meta-line">Use official pages for account-specific issues.</p>
-              <div class="link-row" style="display:grid">
-                <a class="button secondary" href="${provider.officialUrl}" target="_blank" rel="noopener">Open Mail</a>
-                <a class="button secondary" href="${provider.supportUrl}" target="_blank" rel="noopener">Support Center</a>
-                <a class="button secondary" href="${provider.chatUrl}" target="_blank" rel="noopener">Official Contact</a>
-              </div>
-              <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
-              <p><strong>Phone:</strong><br><span class="meta-line">${provider.phone}</span></p>
+              <h3>Provider Details</h3>
+              <dl class="provider-details-list">
+                <div><dt>Provider</dt><dd>${safeName}</dd></div>
+                <div><dt>Category</dt><dd>Email Service</dd></div>
+                <div><dt>Guide Type</dt><dd>Independent Help Articles</dd></div>
+                <div><dt>Affiliation</dt><dd>Not affiliated with ${brandName}</dd></div>
+              </dl>
             </div></div>
           </aside>
         </div>
       </section>
+      <section class="section provider-faq-section">
+        <div class="container">
+          <div class="section-heading">
+            <p class="section-kicker">FAQ</p>
+            <h2>${safeName} guide questions</h2>
+          </div>
+          <div class="faq-list provider-faq-list">
+            ${faqRows
+              .map(
+                ([question, answer]) => `
+                <div class="faq-item">
+                  <button class="faq-toggle" type="button">${escapeHtml(question)}</button>
+                  <div class="answer">${escapeHtml(answer)}</div>
+                </div>`
+              )
+              .join("")}
+          </div>
+          <div class="notice provider-footer-disclaimer">This website provides independent educational guides only. It is not affiliated with, endorsed by, or connected to ${brandName}.</div>
+        </div>
+      </section>
     </main>`;
+}
+
+function providerGuideMeta(provider) {
+  const map = {
+    gmail: { displayName: "Google Mail / Gmail", shortName: "Gmail", brandName: "Google or Gmail", color: "#ef4444" },
+    outlook: { displayName: "Outlook / Hotmail", shortName: "Outlook", brandName: "Microsoft or Outlook", color: "#2563eb" },
+    yahoo: { displayName: "Yahoo Mail", shortName: "Yahoo Mail", brandName: "Yahoo", color: "#7c3aed" },
+    icloud: { displayName: "iCloud Mail", shortName: "iCloud Mail", brandName: "Apple or iCloud", color: "#0ea5e9" },
+    protonmail: { displayName: "Proton Mail", shortName: "Proton Mail", brandName: "Proton Mail", color: "#6d4aff" },
+    aol: { displayName: "AOL Mail", shortName: "AOL Mail", brandName: "AOL", color: "#f59e0b" },
+    att: { displayName: "AT&T Mail", shortName: "AT&T Mail", brandName: "AT&T", color: "#0ea5e9" },
+    xfinity: { displayName: "Xfinity / Comcast Email", shortName: "Comcast Email", brandName: "Comcast or Xfinity", color: "#7c3aed" },
+    verizon: { displayName: "Verizon Mail", shortName: "Verizon Mail", brandName: "Verizon", color: "#dc2626" },
+    cox: { displayName: "Cox Email", shortName: "Cox Email", brandName: "Cox", color: "#2563eb" },
+    spectrum: { displayName: "Spectrum Email", shortName: "Spectrum Email", brandName: "Spectrum", color: "#2563eb" }
+  };
+  return {
+    displayName: provider.name,
+    shortName: provider.name,
+    brandName: provider.name,
+    color: "#2563eb",
+    ...(map[provider.id] || {})
+  };
 }
 
 function settingsTable(provider) {
@@ -1779,7 +1793,7 @@ function routeContent() {
   if (path.startsWith("/admin/")) return adminPage(parts[1]);
   if (path === "/search") return searchPage(url.searchParams.get("q") || "");
   if (parts[0] === "provider" && parts[1]) {
-    const provider = providers.find((item) => item.id === parts[1] || item.slug === parts[1]);
+    const provider = findProviderByRoute(parts[1]);
     if (!provider) return notFoundPage();
     if (parts[2] === "article" && parts[3]) {
       const topicItem = topics.find((item) => item.id === parts[3]);
@@ -1897,15 +1911,31 @@ function bindContactForm() {
 }
 
 function bindProviderTools() {
+  const setProviderTab = (tabs, target) => {
+    tabs.querySelectorAll("[data-provider-tab]").forEach((item) => item.classList.toggle("active", item.dataset.providerTab === target));
+    tabs.querySelectorAll("[data-provider-panel]").forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.providerPanel === target);
+    });
+  };
+
   document.querySelectorAll("[data-provider-tabs]").forEach((tabs) => {
     tabs.querySelectorAll("[data-provider-tab]").forEach((button) => {
       button.addEventListener("click", () => {
         const target = button.dataset.providerTab;
-        tabs.querySelectorAll("[data-provider-tab]").forEach((item) => item.classList.toggle("active", item === button));
-        tabs.querySelectorAll("[data-provider-panel]").forEach((panel) => {
-          panel.classList.toggle("active", panel.dataset.providerPanel === target);
-        });
+        setProviderTab(tabs, target);
+        if (target === "ticket") {
+          document.getElementById("provider-support-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       });
+    });
+  });
+
+  document.querySelectorAll("[data-provider-show-articles]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tabs = document.querySelector("[data-provider-tabs]");
+      if (!tabs) return;
+      setProviderTab(tabs, "articles");
+      tabs.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 
@@ -1937,9 +1967,13 @@ function bindProviderTools() {
     });
   });
 
-  document.querySelectorAll("[data-gmail-help]").forEach((button) => {
+  document.querySelectorAll("[data-provider-scroll-form], [data-gmail-help]").forEach((button) => {
     button.addEventListener("click", () => {
-      document.getElementById("gmail-support-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const tabs = document.querySelector("[data-provider-tabs]");
+      if (tabs) {
+        setProviderTab(tabs, "ticket");
+      }
+      (document.getElementById("provider-support-form") || document.getElementById("gmail-support-form"))?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 }
