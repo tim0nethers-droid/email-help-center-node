@@ -683,6 +683,15 @@ function navigate(path) {
 }
 
 document.addEventListener("click", (event) => {
+  const providerChatButton = event.target.closest("[data-provider-open-chat]");
+  if (providerChatButton) {
+    event.preventDefault();
+    const chatUrl = providerChatButton.dataset.chatUrl || "/ai/chat";
+    console.log("Opening chat", chatUrl);
+    window.location.href = chatUrl;
+    return;
+  }
+
   const showArticlesButton = event.target.closest("[data-provider-show-articles]");
   if (showArticlesButton) {
     event.preventDefault();
@@ -1013,10 +1022,10 @@ function liveChatWidget() {
   if (provider) {
     return `
       <div class="live-chat-widget provider-ai-chat-widget" id="live-chat-widget">
-        <a class="provider-floating-chat-button" href="${providerChatUrl(provider)}" data-link aria-label="Open ${escapeHtml(provider.name)} chat">
+        <button class="provider-floating-chat-button" type="button" data-provider-open-chat data-chat-url="${providerChatUrl(provider)}" aria-label="Open ${escapeHtml(provider.name)} chat">
           ${icons.bot}
           <span class="provider-floating-badge">1</span>
-        </a>
+        </button>
       </div>`;
   }
   const isOpen = localStorage.getItem("ehc_live_chat_open") === "true";
@@ -1302,7 +1311,7 @@ function providerPage(provider) {
                     <h2>Need help faster? Chat with our team</h2>
                     <p>Get guidance from our independent support assistant.</p>
                   </div>
-                  <a class="button provider-red-button" href="${providerChatUrl(provider)}" data-link>Start Chat Now</a>
+                  <button class="button provider-red-button" type="button" data-provider-open-chat data-chat-url="${providerChatUrl(provider)}">Start Chat Now</button>
                 </div>
                 <div class="notice info">Or select your issue below for step-by-step guidance.</div>
                 <div class="card provider-troubleshooting-card"><div class="card-body">
@@ -1376,7 +1385,7 @@ function providerPage(provider) {
               <h3>Need Help Now?</h3>
               <p class="section-kicker">Get instant assistance</p>
               <p>Chat with our AI-powered support assistant for immediate help with your ${safeName} issues.</p>
-              <a class="button full provider-red-button" href="${providerChatUrl(provider)}" data-link>Start Live Chat</a>
+              <button class="button full provider-red-button" type="button" data-provider-open-chat data-chat-url="${providerChatUrl(provider)}">Start Live Chat</button>
               <small>Instant &bull; Free &bull; Independent resource, not affiliated with ${safeName}</small>
             </div></div>
             <div class="card"><div class="card-body">
