@@ -80,6 +80,9 @@ function send(res, status, body, contentType = "application/json; charset=utf-8"
   res.writeHead(status, {
     "Content-Type": contentType,
     "Content-Length": Buffer.byteLength(payload),
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
     ...headers
   });
   res.end(payload);
@@ -420,6 +423,11 @@ async function updateLiveChat(threadId, updater) {
 }
 
 async function handleApi(req, res, url) {
+  if (req.method === "OPTIONS") {
+    send(res, 204, "", "text/plain; charset=utf-8");
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/contact") {
     const body = await readBody(req);
     const name = cleanText(body.name, 120);

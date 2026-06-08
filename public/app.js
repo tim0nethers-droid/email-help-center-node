@@ -2262,11 +2262,11 @@ function bindChat() {
   if (leadForm) {
     const handleLeadSubmit = async (event) => {
       console.log("handleLeadSubmit fired");
+      const statusEl = document.getElementById("chat-start-status");
       try {
         event.preventDefault();
         if (leadForm.dataset.submitting === "1") return;
         leadForm.dataset.submitting = "1";
-        const statusEl = document.getElementById("chat-start-status");
         if (statusEl) statusEl.textContent = "Starting chat...";
         const data = Object.fromEntries(new FormData(leadForm).entries());
         const lead = {
@@ -2343,7 +2343,7 @@ function bindChat() {
         if (statusEl) statusEl.textContent = "Chat opened. Saving request...";
         leadForm.dataset.submitting = "0";
         try {
-          const response = await fetch("/api/live/start", {
+          const response = await fetch(apiUrl("/api/live/start"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -2371,7 +2371,6 @@ function bindChat() {
         if (statusEl) statusEl.textContent = "Chat started.";
       } catch (error) {
         console.error("handleLeadSubmit failed", error);
-        const statusEl = document.getElementById("chat-start-status");
         if (statusEl) statusEl.textContent = "Chat could not start. Please try again.";
         leadForm.dataset.submitting = "0";
       }
@@ -2391,7 +2390,7 @@ function bindChat() {
     persist();
     draw();
     if (state.sessionId) {
-      fetch("/api/live/message", {
+      fetch(apiUrl("/api/live/message"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, message: text })
@@ -2546,6 +2545,17 @@ async function readApiJson(response) {
   }
 }
 
+function apiBaseUrl() {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "::1") {
+    if (window.location.port === "3000") return "http://localhost:3010";
+  }
+  return "";
+}
+
+function apiUrl(pathname) {
+  return `${apiBaseUrl()}${pathname}`;
+}
+
 function bindLiveChatWidget() {
   const widget = document.getElementById("live-chat-widget");
   if (!widget) return;
@@ -2557,7 +2567,7 @@ function bindLiveChatWidget() {
   async function ensureLiveChatSession() {
     const sessionId = currentLiveChatSession();
     try {
-      const response = await fetch("/api/live/open", {
+      const response = await fetch(apiUrl("/api/live/open"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2678,7 +2688,7 @@ function bindLiveChatWidget() {
       const data = Object.fromEntries(new FormData(form).entries());
       saveLiveChatVisitor(data);
       try {
-        const response = await fetch("/api/live/start", {
+        const response = await fetch(apiUrl("/api/live/start"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data)
@@ -2703,7 +2713,7 @@ function bindLiveChatWidget() {
     if (!sessionId) return;
     visitorTypingActive = typing;
     try {
-      await fetch("/api/live/typing", {
+      await fetch(apiUrl("/api/live/typing"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, typing })
