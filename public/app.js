@@ -1047,6 +1047,7 @@ function isInternalPath(pathname = window.location.pathname) {
 
 function liveChatWidget() {
   if (isInternalPath()) return "";
+  if (window.location.pathname === "/ai/chat") return "";
   const provider = currentProviderFromPath();
   if (provider) {
     return `
