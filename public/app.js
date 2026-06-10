@@ -894,6 +894,7 @@ function supportHub(provider = null) {
   const articleProvider = selectedProvider || providers[0];
   const quickProviders = provider ? [provider, ...providers.filter((item) => item.id !== provider.id).slice(0, 4)] : providers.slice(0, 5);
   const sourcePage = `${window.location.pathname}${window.location.search}`;
+  const formValues = savedVisitorFormValues({ providerDomain: providerChatDomain(selectedProvider), company: selectedProvider.name });
   return `
     <section class="global-support-band">
       <div class="container">
@@ -960,15 +961,15 @@ function supportHub(provider = null) {
                   <form class="form support-ticket-form">
                     <input type="hidden" name="sourcePage" value="${escapeHtml(sourcePage)}">
                     <div class="form-row">
-                      <div class="field"><label>Name</label><input name="name" required placeholder="Your name"></div>
-                      <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number"></div>
+                      <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
+                      <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number" value="${escapeHtml(formValues.phone)}"></div>
                     </div>
                     <div class="form-row">
-                      <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com"></div>
-                      <div class="field"><label>Company / Provider</label><select name="category">${providerSelectOptions(selectedProvider.name)}</select></div>
+                      <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
+                      <div class="field"><label>Company / Provider</label><select name="category">${providerSelectOptions(formValues.company || selectedProvider.name)}</select></div>
                     </div>
                     <div class="field"><label>Subject</label><input name="subject" required value="${provider ? `${provider.name} support request` : "Email support request"}"></div>
-                    <div class="field"><label>Issue</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes."></textarea></div>
+                    <div class="field"><label>Issue</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes.">${escapeHtml(formValues.issue)}</textarea></div>
                     <button class="button" type="submit">${icons.reply}Submit Ticket</button>
                   </form>
                   <div class="provider-ticket-status" style="margin-top:16px"></div>
@@ -1263,6 +1264,7 @@ function providerPage(provider) {
   const safeName = escapeHtml(meta.shortName);
   const brandName = escapeHtml(meta.brandName);
   const sourcePage = escapeHtml(`${window.location.pathname}${window.location.search}`);
+  const formValues = savedVisitorFormValues({ providerDomain: providerChatDomain(provider), company: meta.shortName });
   const initialTab = new URL(window.location.href).searchParams.get("section") === "articles" ? "articles" : "troubleshooter";
   const issueCards =
     provider.id === "gmail"
@@ -1399,14 +1401,14 @@ function providerPage(provider) {
                     <input type="hidden" name="sourcePage" value="${sourcePage}">
                     <input type="hidden" name="subject" value="${safeName} help request">
                     <div class="form-row">
-                      <div class="field"><label>Full Name</label><input name="name" required placeholder="Your full name"></div>
-                      <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com"></div>
+                      <div class="field"><label>Full Name</label><input name="name" required placeholder="Your full name" value="${escapeHtml(formValues.name)}"></div>
+                      <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
                     </div>
                     <div class="form-row">
-                      <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" placeholder="Phone number"></div>
+                      <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" placeholder="Phone number" value="${escapeHtml(formValues.phone)}"></div>
                       <div class="field"><label>Problem Type</label><select name="category" required><option value="">Select problem type</option><option>Login problem</option><option>Password reset guide</option><option>Not receiving emails</option><option>Email setup</option><option>Storage full</option><option>Account security</option><option>Other issue</option></select></div>
                     </div>
-                    <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes."></textarea></div>
+                    <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes.">${escapeHtml(formValues.issue)}</textarea></div>
                     <button class="button" type="submit">${icons.reply}Submit Request</button>
                   </form>
                   <div class="provider-ticket-status" style="margin-top:16px"></div>
@@ -1633,15 +1635,7 @@ function chatPage() {
   const providerDomain = providerChatDomain(chatProvider) || "gmail.com";
   const state = readChatState(providerDomain);
   const chatStarted = Boolean(state.started);
-  const savedVisitor = readSavedLiveChatVisitor();
-  const leadData = {
-    name: savedVisitor.name || state.leadData?.name || "",
-    email: savedVisitor.email || state.leadData?.email || "",
-    phone: savedVisitor.phone || state.leadData?.phone || "",
-    company: savedVisitor.company || state.leadData?.company || chatProvider.name || "",
-    issue: state.leadData?.issue || issue || "",
-    message: state.leadData?.message || state.leadData?.issue || issue || ""
-  };
+  const leadData = savedVisitorFormValues({ providerDomain, company: chatProvider.name, issue });
   const chatTitle = `${chatProvider.name} Help Chat`;
   const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
   const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
@@ -1793,6 +1787,7 @@ function toolPage(title, subtitle, body, toolId) {
 }
 
 function contactPage() {
+  const formValues = savedVisitorFormValues({ company: "Gmail" });
   return `
     <main id="main" class="page">
       <section class="page-hero"><div class="container"><span class="badge">${icons.mail}Contact</span><h1>Contact Email</h1><p>Submit a self-help question or website inquiry. Do not send passwords, OTPs, or account recovery codes.</p></div></section>
@@ -1802,17 +1797,17 @@ function contactPage() {
             <form class="form" id="contact-form">
               <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
               <div class="form-row">
-                <div class="field"><label>Name</label><input name="name" required placeholder="Your name"></div>
-                <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number"></div>
+                <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
+                <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number" value="${escapeHtml(formValues.phone)}"></div>
               </div>
               <div class="form-row">
-                <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com"></div>
-                <div class="field"><label>Company / Provider</label><select name="category">${providerSelectOptions("Gmail")}<option>Website feedback</option><option>Advertising</option><option>Other</option></select></div>
+                <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
+                <div class="field"><label>Company / Provider</label><select name="category">${providerSelectOptions(formValues.company || "Gmail")}<option>Website feedback</option><option>Advertising</option><option>Other</option></select></div>
               </div>
               <div class="form-row single">
                 <div class="field"><label>Subject</label><input name="subject" required placeholder="How can we help?"></div>
               </div>
-              <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the issue. Please do not include passwords, OTPs, private emails, or recovery codes."></textarea></div>
+              <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the issue. Please do not include passwords, OTPs, private emails, or recovery codes.">${escapeHtml(formValues.issue)}</textarea></div>
               <button class="button" type="submit">${icons.reply}Submit Form</button>
             </form>
             <div id="contact-status" style="margin-top:16px"></div>
@@ -2173,6 +2168,13 @@ function bindContactForm() {
     const status = document.getElementById("contact-status");
     status.innerHTML = `<div class="notice info">Submitting...</div>`;
     const data = Object.fromEntries(new FormData(form).entries());
+    saveLiveChatVisitor({
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      company: data.company || data.category,
+      issue: data.message || data.issue || data.subject
+    });
     try {
       const response = await fetch("/api/contact", {
         method: "POST",
@@ -2234,6 +2236,13 @@ function bindProviderTools() {
       const status = form.parentElement.querySelector(".provider-ticket-status");
       status.innerHTML = `<div class="notice info">Submitting ticket...</div>`;
       const data = Object.fromEntries(new FormData(form).entries());
+      saveLiveChatVisitor({
+        name: data.name,
+        phone: data.phone,
+        email: data.email,
+        company: data.company || form.dataset.providerName || data.category,
+        issue: data.message || data.issue || data.subject
+      });
       try {
         const response = await fetch("/api/contact", {
           method: "POST",
@@ -2579,20 +2588,35 @@ function readSavedLiveChatVisitor() {
     name: visitor.name || "",
     phone: visitor.phone || "",
     email: visitor.email || "",
-    company: visitor.company || ""
+    company: visitor.company || "",
+    issue: visitor.issue || visitor.message || ""
   };
 }
 
 function saveLiveChatVisitor(visitor) {
+  const existing = readSavedLiveChatVisitor();
   localStorage.setItem(
     "ehc_live_chat_visitor",
     JSON.stringify({
-      name: visitor.name || "",
-      phone: visitor.phone || "",
-      email: visitor.email || "",
-      company: visitor.company || ""
+      name: visitor.name || existing.name || "",
+      phone: visitor.phone || existing.phone || "",
+      email: visitor.email || existing.email || "",
+      company: visitor.company || existing.company || "",
+      issue: visitor.issue || visitor.message || existing.issue || ""
     })
   );
+}
+
+function savedVisitorFormValues({ providerDomain = "", company = "", issue = "" } = {}) {
+  const savedVisitor = readSavedLiveChatVisitor();
+  const chatState = providerDomain ? readChatState(providerDomain) : { leadData: null };
+  return {
+    name: savedVisitor.name || chatState.leadData?.name || "",
+    email: savedVisitor.email || chatState.leadData?.email || "",
+    phone: savedVisitor.phone || chatState.leadData?.phone || "",
+    company: savedVisitor.company || chatState.leadData?.company || company || "",
+    issue: savedVisitor.issue || chatState.leadData?.issue || chatState.leadData?.message || issue || ""
+  };
 }
 
 function readLocalJson(key, fallback) {
@@ -2709,7 +2733,8 @@ function bindLiveChatWidget() {
       name: currentValues.name || savedVisitor.name,
       phone: currentValues.phone || savedVisitor.phone,
       email: currentValues.email || savedVisitor.email,
-      company: currentValues.company || savedVisitor.company
+      company: currentValues.company || savedVisitor.company,
+      issue: currentValues.issue || savedVisitor.issue
     };
     const issueOptions = [
       "Can't log in",
@@ -2744,7 +2769,7 @@ function bindLiveChatWidget() {
           <div class="live-issue-options">
             ${issueOptions.map((issue) => `<button type="button" data-live-issue="${escapeHtml(issue)}">${escapeHtml(issue)}</button>`).join("")}
           </div>
-          <textarea name="issue" id="live-chat-issue" required placeholder="Choose issue or type here"></textarea>
+          <textarea name="issue" id="live-chat-issue" required placeholder="Choose issue or type here">${escapeHtml(formValues.issue)}</textarea>
         </div>
         <button class="button" type="submit">${icons.reply}Start Chat</button>
       </form>
