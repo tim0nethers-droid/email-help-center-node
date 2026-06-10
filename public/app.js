@@ -1633,7 +1633,15 @@ function chatPage() {
   const providerDomain = providerChatDomain(chatProvider) || "gmail.com";
   const state = readChatState(providerDomain);
   const chatStarted = Boolean(state.started);
-  const leadData = state.leadData || { name: "", email: "", phone: "", issue: issue || "", message: "" };
+  const savedVisitor = readSavedLiveChatVisitor();
+  const leadData = {
+    name: savedVisitor.name || state.leadData?.name || "",
+    email: savedVisitor.email || state.leadData?.email || "",
+    phone: savedVisitor.phone || state.leadData?.phone || "",
+    company: savedVisitor.company || state.leadData?.company || chatProvider.name || "",
+    issue: state.leadData?.issue || issue || "",
+    message: state.leadData?.message || state.leadData?.issue || issue || ""
+  };
   const chatTitle = `${chatProvider.name} Help Chat`;
   const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
   const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
@@ -1702,7 +1710,7 @@ function chatPage() {
                 <div class="form-row single">
                   <div class="field"><label>Describe Your Problem</label><textarea name="issue" required placeholder="Please describe your issue in detail...">${escapeHtml(leadData.issue || issue || "")}</textarea></div>
                 </div>
-                <input type="hidden" name="company" value="${escapeHtml(chatProvider.name)}">
+                <input type="hidden" name="company" value="${escapeHtml(leadData.company || chatProvider.name)}">
                 <button class="button provider-red-button" type="button" id="chat-start-button">Start Help Chat</button>
                 <div id="chat-start-status" class="helper ai-chat-secure" aria-live="polite">Secure &amp; encrypted connection</div>
               </form>
@@ -2339,6 +2347,12 @@ function bindChat() {
           issue: String(data.issue || "").trim(),
           message: String(data.issue || "").trim()
         };
+        saveLiveChatVisitor({
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          company: String(data.company || chatProvider.name || "").trim() || chatProvider.name
+        });
         const sessionId = state.sessionId || currentLiveChatSession() || chatSessionId();
         state = {
           started: true,

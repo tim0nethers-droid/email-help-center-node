@@ -208,28 +208,6 @@ function normalizeLiveLookupValue(value) {
     .trim();
 }
 
-function digitsOnly(value) {
-  return String(value || "").replace(/\D+/g, "");
-}
-
-function findLiveThreadMatch(rows, { sessionId = "", email = "", phone = "" } = {}) {
-  const sessionKey = cleanText(sessionId, 120);
-  const emailKey = normalizeLiveLookupValue(email);
-  const phoneKey = digitsOnly(phone);
-  const matches = rows.filter((thread) => {
-    if (sessionKey && thread.id === sessionKey) return true;
-    const visitor = thread.visitor || {};
-    const threadEmail = normalizeLiveLookupValue(visitor.email);
-    const threadPhone = digitsOnly(visitor.phone);
-    return Boolean(
-      (emailKey && threadEmail && emailKey === threadEmail) ||
-      (phoneKey && threadPhone && phoneKey === threadPhone)
-    );
-  });
-  if (!matches.length) return null;
-  return matches.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))[0];
-}
-
 function providerFromMessage(message) {
   const lowered = message.toLowerCase();
   const providers = [
@@ -536,8 +514,6 @@ async function handleApi(req, res, url) {
     const company = cleanText(body.company, 120);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
     const issue = redactSecrets(body.issue || body.message);
-    const emailKey = normalizeLiveLookupValue(email);
-    const phoneKey = digitsOnly(phone);
 
     if (!name || !phone || !email || !company || !issue) {
       jsonError(res, 400, "Name, phone, email, company, and issue are required.");
@@ -576,15 +552,7 @@ async function handleApi(req, res, url) {
       ];
 
     const rows = await readLiveChats();
-    let existingIndex = rows.findIndex((row) => row.id === sessionId);
-    if (existingIndex === -1 && (emailKey || phoneKey)) {
-      existingIndex = rows.findIndex((row) => {
-        const visitor = row.visitor || {};
-        const rowEmail = normalizeLiveLookupValue(visitor.email);
-        const rowPhone = digitsOnly(visitor.phone);
-        return Boolean((emailKey && rowEmail && rowEmail === emailKey) || (phoneKey && rowPhone && rowPhone === phoneKey));
-      });
-    }
+    const existingIndex = rows.findIndex((row) => row.id === sessionId);
     let thread;
     if (existingIndex !== -1) {
       thread = rows[existingIndex];
@@ -613,14 +581,9 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/live/open") {
     const body = await readBody(req);
     const sessionId = cleanText(body.sessionId, 120);
-    const email = cleanText(body.email || "", 180);
-    const phone = cleanText(body.phone || "", 40);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
     const rows = await readLiveChats();
     let thread = rows.find((row) => row.id === sessionId);
-    if (!thread && (email || phone)) {
-      thread = findLiveThreadMatch(rows, { email, phone });
-    }
     if (thread) {
       thread.status = "open";
       thread.updatedAt = new Date().toISOString();
