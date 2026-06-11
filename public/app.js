@@ -1706,7 +1706,20 @@ function chatPage() {
                   <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required placeholder="Phone Number" value="${escapeHtml(leadData.phone || "")}"></div>
                 </div>
                 <div class="form-row single">
-                  <div class="field"><label>Describe Your Problem</label><textarea name="issue" required placeholder="Please describe your issue in detail...">${escapeHtml(leadData.issue || issue || "")}</textarea></div>
+                  <div class="field">
+                    <label>Describe Your Problem</label>
+                    <textarea name="issue" required placeholder="Please describe your issue in detail...">${escapeHtml(leadData.issue || issue || "")}</textarea>
+                    <div class="ai-chat-issue-options" aria-label="Quick issue options">
+                      <button type="button" class="ai-chat-issue-option" data-issue="I can't login to my email">I can't login</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="My email is not working">Mail not working</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="I forgot my password">Forgot password</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="I can't receive emails">Can't receive emails</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="I can't send emails">Can't send emails</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="My email is hacked">Email hacked</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="Email setup on phone">Setup on phone</button>
+                      <button type="button" class="ai-chat-issue-option" data-issue="Storage full issue">Storage full</button>
+                    </div>
+                  </div>
                 </div>
                 <input type="hidden" name="company" value="${escapeHtml(leadData.company || chatProvider.name)}">
                 <button class="button provider-red-button" type="button" id="chat-start-button">Start Help Chat</button>
@@ -2468,6 +2481,25 @@ function bindChat() {
     const startBtn = document.getElementById("chat-start-button");
     if (startBtn) startBtn.addEventListener("click", handleLeadSubmit);
     leadForm.addEventListener("submit", handleLeadSubmit);
+    document.querySelectorAll(".ai-chat-issue-option").forEach((button) => {
+      button.addEventListener("click", () => {
+        const issueText = button.dataset.issue || button.textContent.trim();
+        const issueField = leadForm.querySelector('textarea[name="issue"]');
+        if (issueField) {
+          issueField.value = issueText;
+          issueField.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        document.querySelectorAll(".ai-chat-issue-option").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        if (!leadForm.checkValidity()) {
+          leadForm.reportValidity();
+          const firstInvalid = leadForm.querySelector(":invalid");
+          if (firstInvalid) firstInvalid.focus();
+          return;
+        }
+        handleLeadSubmit(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+    });
     return;
   }
 

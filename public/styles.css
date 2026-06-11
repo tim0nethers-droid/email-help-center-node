@@ -1690,6 +1690,31 @@ textarea::placeholder {
   min-height: 110px;
 }
 
+.ai-chat-issue-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-chat-issue-option {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ai-chat-issue-option:hover,
+.ai-chat-issue-option.active {
+  border-color: var(--primary);
+  background: #eff6ff;
+  color: var(--primary);
+}
+
 .ai-chat-secure {
   text-align: center;
   margin-top: 8px;
