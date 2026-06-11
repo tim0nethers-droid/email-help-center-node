@@ -391,7 +391,7 @@ async function readLiveChats() {
 }
 
 async function writeLiveChats(rows) {
-  await writeJson(files.liveChats, rows.slice(0, 500));
+  await writeJson(files.liveChats, rows);
 }
 
 function makeLiveMessage(from, text, name, extra = {}) {
@@ -751,8 +751,10 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/live") {
-      const rows = await readLiveChats();
-      send(res, 200, { ok: true, rows: rows.map(liveChatSummary) });
+      const filter = cleanText(url.searchParams.get("status"), 40).toLowerCase();
+      const rows = (await readLiveChats()).sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+      const filteredRows = filter && filter !== "all" ? rows.filter((row) => String(row.status || "open").toLowerCase() === filter) : rows;
+      send(res, 200, { ok: true, filter: filter || "all", rows: filteredRows.map(liveChatSummary) });
       return;
     }
 

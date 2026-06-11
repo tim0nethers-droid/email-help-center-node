@@ -3350,6 +3350,42 @@ function adminVisitorsSummary(rows) {
     </section>`;
 }
 
+function adminChatHistorySection(rows, { limit = 10, title = "Recent Chat History", viewAll = true } = {}) {
+  const visibleRows = Number.isFinite(limit) ? rows.slice(0, limit) : rows;
+  return `
+    <section class="admin-mobile-card admin-chat-history-card">
+      <div class="admin-mobile-card-head">
+        <div><h2>${escapeHtml(title)}</h2><p>${rows.length} saved conversation${rows.length === 1 ? "" : "s"}</p></div>
+        ${viewAll ? `<a href="/admin/live" data-link>View All ${icons.external}</a>` : ""}
+      </div>
+      <div class="admin-chat-history-list">
+        ${
+          visibleRows.length
+            ? visibleRows
+                .map((row) => {
+                  const visitorName = row.visitor?.name || "Anonymous Visitor";
+                  const contact = [row.visitor?.email, row.visitor?.phone].filter(Boolean).join(" / ");
+                  const status = String(row.status || "open").toLowerCase();
+                  return `
+                  <a class="admin-chat-history-item" href="/admin/live?thread=${encodeURIComponent(row.id)}" data-link>
+                    <span class="admin-chat-history-main">
+                      <strong>${escapeHtml(visitorName)}</strong>
+                      ${contact ? `<small>${escapeHtml(contact)}</small>` : ""}
+                      <em>${escapeHtml(messagePreview(row.lastMessage))}</em>
+                    </span>
+                    <span class="admin-chat-history-side">
+                      <span class="status-pill ${escapeHtml(status)}">${escapeHtml(status)}</span>
+                      <time>${lastActivityLabel(row.updatedAt)}</time>
+                    </span>
+                  </a>`;
+                })
+                .join("")
+            : `<div class="empty-state">No chat history yet.</div>`
+        }
+      </div>
+    </section>`;
+}
+
 function adminQuickActions(stats) {
   const actions = [
     ["Open Chats", "/admin/live", icons.reply, stats.openLiveChats || 0],
@@ -3706,7 +3742,9 @@ async function pollAdminLiveAlerts() {
 
 async function pollAdminLiveRealtime(content) {
   try {
-    const [stats, data] = await Promise.all([adminFetch("/api/admin/stats"), adminFetch("/api/admin/live")]);
+    const liveFilter = content.dataset.liveFilter || "all";
+    const liveUrl = `/api/admin/live${liveFilter !== "all" ? `?status=${encodeURIComponent(liveFilter)}` : ""}`;
+    const [stats, data] = await Promise.all([adminFetch("/api/admin/stats"), adminFetch(liveUrl)]);
     const snapshot = adminLiveAlertSnapshot(data.rows);
     updateAdminSoundAlerts(data.rows);
     adminLiveSnapshot = snapshot;
@@ -3734,19 +3772,26 @@ async function pollAdminLiveRealtime(content) {
 }
 
 function adminLiveDashboard(rows, selectedId, stats = {}) {
+  const activeFilter = document.getElementById("admin-content")?.dataset.liveFilter || "all";
+  const filtersHtml = `
+    <div class="admin-live-filters" role="tablist" aria-label="Live chat history filters">
+      ${["all", "open", "closed", "missed", "waiting"]
+        .map((filter) => `<button class="${activeFilter === filter ? "active" : ""}" type="button" data-admin-live-filter="${filter}">${filter[0].toUpperCase()}${filter.slice(1)}</button>`)
+        .join("")}
+    </div>`;
   if (!rows.length) {
     return `
       <div class="admin-live-shell chat-list-visible">
-        ${adminChatList(rows, selectedId)}
+        <div class="admin-live-history-panel">${filtersHtml}${adminChatList(rows, selectedId)}</div>
         <div class="admin-live-empty-state">
-          <div class="empty-state">Visitor messages will appear here after someone starts Live Chat.</div>
+          <div class="empty-state">No conversations found for this filter.</div>
         </div>
       </div>`;
   }
 
   return `
     <div class="admin-live-shell chat-list-visible${selectedId ? " chat-thread-visible" : ""}">
-      ${adminChatList(rows, selectedId)}
+      <div class="admin-live-history-panel">${filtersHtml}${adminChatList(rows, selectedId)}</div>
       <section class="admin-live-thread-shell admin-mobile-thread admin-live-column admin-live-chatpane">
         <div class="admin-live-column-head admin-live-thread-head">
           <button class="icon-btn admin-live-back" id="admin-live-back" type="button" aria-label="Back to inbox">${icons.chevron}</button>
@@ -3933,6 +3978,17 @@ async function openMobileChatModal(threadId, options = {}) {
 
 function bindAdminLiveInbox(content, selectedId, options = {}) {
   const initialLoad = options.initialLoad ?? true;
+  document.querySelectorAll("[data-admin-live-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const filter = button.dataset.adminLiveFilter || "all";
+      content.dataset.liveFilter = filter;
+      delete content.dataset.selectedThread;
+      const url = filter === "all" ? "/admin/live" : `/admin/live?status=${encodeURIComponent(filter)}`;
+      window.history.replaceState({}, "", url);
+      loadAdmin("live", content);
+    });
+  });
+
   document.querySelectorAll("[data-live-thread]").forEach((button) => {
     button.addEventListener("click", () => {
       content.dataset.selectedThread = button.dataset.liveThread;
@@ -4118,8 +4174,12 @@ async function loadAdmin(kind, content) {
     const statHtml = adminStatCards(stats.stats);
 
     if (kind === "live") {
-      const data = await adminFetch("/api/admin/live");
-      const selectedId = content.dataset.selectedThread || (!isAdminMobileLayout() ? data.rows[0]?.id || "" : "");
+      const params = new URLSearchParams(window.location.search);
+      const filter = params.get("status") || content.dataset.liveFilter || "all";
+      content.dataset.liveFilter = filter;
+      const data = await adminFetch(`/api/admin/live${filter !== "all" ? `?status=${encodeURIComponent(filter)}` : ""}`);
+      const requestedThread = params.get("thread") || "";
+      const selectedId = content.dataset.selectedThread || requestedThread || (!isAdminMobileLayout() ? data.rows[0]?.id || "" : "");
       const snapshot = adminLiveAlertSnapshot(data.rows);
       if (adminLiveSnapshot && snapshot.unread > adminLiveSnapshot.unread && snapshot.latest !== adminLiveSnapshot.latest) {
         playAdminChatSound();
@@ -4217,6 +4277,7 @@ async function loadAdmin(kind, content) {
       statHtml +
       adminLiveAlertBar(liveData.rows) +
       adminVisitorsSummary(liveData.rows) +
+      adminChatHistorySection(liveData.rows, { limit: 10, title: "Recent Chat History", viewAll: true }) +
       adminQuickActions(stats.stats);
     bindAdminSoundControls("dashboard");
   } catch (error) {

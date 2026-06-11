@@ -2477,6 +2477,39 @@ body.ai-chat-route .live-chat-widget {
   overflow: hidden;
 }
 
+.admin-live-history-panel {
+  min-width: 0;
+}
+
+.admin-live-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: white;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.admin-live-filters button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.admin-live-filters button.active,
+.admin-live-filters button:hover {
+  border-color: rgba(18, 103, 216, 0.42);
+  background: rgba(18, 103, 216, 0.08);
+  color: var(--primary);
+}
+
 .admin-chat-list-head {
   display: flex;
   align-items: center;
@@ -2592,6 +2625,16 @@ body.ai-chat-route .live-chat-widget {
   color: #475569;
 }
 
+.status-pill.missed {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.status-pill.waiting {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
 .unread-pill {
   display: inline-flex;
   align-items: center;
@@ -2611,6 +2654,65 @@ body.ai-chat-route .live-chat-widget {
 
 .admin-live-thread-shell {
   display: block;
+}
+
+.admin-chat-history-card {
+  margin-top: 16px;
+}
+
+.admin-chat-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-chat-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: white;
+  color: var(--text);
+  padding: 12px;
+}
+
+.admin-chat-history-item:hover {
+  border-color: rgba(18, 103, 216, 0.35);
+  background: rgba(18, 103, 216, 0.04);
+}
+
+.admin-chat-history-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.admin-chat-history-main strong,
+.admin-chat-history-main small,
+.admin-chat-history-main em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-chat-history-main small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.admin-chat-history-main em {
+  color: #475569;
+  font-size: 0.84rem;
+  font-style: normal;
+}
+
+.admin-chat-history-side {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .mobile-chat-modal {
