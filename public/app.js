@@ -86,6 +86,10 @@ const translations = {
   }
 };
 
+const TOP_DISCLAIMER_TEXT = "Independent guide — not affiliated with Google, Gmail, or any email provider.";
+const FOOTER_DISCLAIMER_TEXT =
+  "Independent Third-Party Resource — Not affiliated with, endorsed by, or sponsored by Google, Gmail, Microsoft, Yahoo, Apple, or any email service provider.";
+
 const categories = {
   major: "Major Global Providers",
   "us-isp": "US Internet Service Providers",
@@ -809,7 +813,7 @@ function header() {
 
   return `
     <a class="skip-link" href="#main">Skip to content</a>
-    <div class="disclaimer-bar"><div class="container">${icons.alert}<span>Independent Third-Party Resource &mdash; This website is NOT affiliated with, endorsed by, or sponsored by Google, Gmail, Microsoft, Yahoo, Apple, or any email service provider. We provide independent educational guides and AI tools only.</span></div></div>
+    <div class="disclaimer-bar"><div class="container">${icons.alert}<span>${escapeHtml(TOP_DISCLAIMER_TEXT)}</span></div></div>
     <header class="site-header">
       <div class="container header-row">
         ${brand()}
@@ -1006,7 +1010,7 @@ function footer() {
   return `
     <footer class="footer">
       <div class="container">
-        <div class="notice"><strong>Independent Resource.</strong> Email is not affiliated with, endorsed by, sponsored by, or officially connected with Google, Microsoft, Yahoo, Apple, AOL, AT&T, Comcast, Verizon, or any other email provider. We do not access accounts, reset passwords, or collect credentials.</div>
+        <div class="notice"><strong>Independent Resource.</strong> ${escapeHtml(FOOTER_DISCLAIMER_TEXT)}</div>
         <div class="footer-grid">
           <div>
             <h3>Email</h3>
