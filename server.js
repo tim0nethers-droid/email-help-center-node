@@ -16,6 +16,7 @@ const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
 const dataDir = path.join(rootDir, "data");
+const backupDir = path.join(dataDir, "backups");
 
 const files = {
   submissions: path.join(dataDir, "submissions.json"),
@@ -65,7 +66,57 @@ async function readJson(file) {
 
 async function writeJson(file, value) {
   await ensureDataFiles();
-  await fsp.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const payload = `${JSON.stringify(value, null, 2)}\n`;
+  const tempFile = `${file}.${process.pid}.${Date.now()}.tmp`;
+  let lastError = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      await fsp.writeFile(tempFile, payload, "utf8");
+      await fsp.rename(tempFile, file);
+      return;
+    } catch (error) {
+      lastError = error;
+      await fsp.unlink(tempFile).catch(() => {});
+      if (!["EBUSY", "EPERM", "EACCES"].includes(error.code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 120 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+function backupTimestamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}
+
+async function pruneLiveChatBackups(limit = 50) {
+  try {
+    const entries = (await fsp.readdir(backupDir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && /^live-chats-\d{4}-\d{2}-\d{2}-\d{6}(?:-\d+)?\.json$/.test(entry.name))
+      .map((entry) => entry.name)
+      .sort()
+      .reverse();
+    await Promise.all(entries.slice(limit).map((name) => fsp.unlink(path.join(backupDir, name)).catch(() => {})));
+  } catch {
+    // Backup pruning should never block the live chat write path.
+  }
+}
+
+async function backupLiveChatsFile() {
+  try {
+    await fsp.mkdir(backupDir, { recursive: true });
+    await fsp.access(files.liveChats);
+    const stamp = backupTimestamp();
+    let backupPath = path.join(backupDir, `live-chats-${stamp}.json`);
+    for (let index = 1; fs.existsSync(backupPath); index += 1) {
+      backupPath = path.join(backupDir, `live-chats-${stamp}-${index}.json`);
+    }
+    await fsp.copyFile(files.liveChats, backupPath);
+    await pruneLiveChatBackups();
+  } catch {
+    // If the first write happens before the file exists, continue normally.
+  }
 }
 
 async function appendJson(file, item) {
@@ -391,6 +442,7 @@ async function readLiveChats() {
 }
 
 async function writeLiveChats(rows) {
+  await backupLiveChatsFile();
   await writeJson(files.liveChats, rows);
 }
 
