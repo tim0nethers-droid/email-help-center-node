@@ -18,7 +18,7 @@ Default local admin ID and password:
 
 ```text
 admin
-admin123
+EmailHelp@2026#Admin!
 ```
 
 Change it before production:

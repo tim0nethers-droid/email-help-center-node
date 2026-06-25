@@ -1924,10 +1924,10 @@ function adminLoginPage() {
     <main id="main" class="page">
       <section class="page-hero"><div class="container"><span class="badge">${icons.lock}Admin Login</span><h1>Admin Login</h1><p>Use admin ID and password to open live chat, support forms, and reports.</p></div></section>
       <section class="section"><div class="container" style="max-width:560px"><div class="card"><div class="card-body">
-        <div class="notice info" style="margin-bottom:16px"><strong>Default login:</strong> Admin ID <code>admin</code> and password <code>admin123</code>.</div>
+        <div class="notice info" style="margin-bottom:16px"><strong>Admin login:</strong> Use the server configured admin ID and password.</div>
         <form class="form" id="admin-login-form">
           <div class="field"><label>Admin ID</label><input name="adminId" required autocomplete="username" placeholder="Default: admin"></div>
-          <div class="field"><label>Password</label><input type="password" name="password" required autocomplete="current-password" placeholder="Default: admin123"></div>
+          <div class="field"><label>Password</label><input type="password" name="password" required autocomplete="current-password" placeholder="Admin password"></div>
           <button class="button" type="submit">${icons.lock}Login</button>
         </form>
         <div id="admin-login-status" style="margin-top:14px"></div>
@@ -4254,7 +4254,7 @@ async function loadAdmin(kind, content) {
       content.innerHTML =
         statHtml +
         `<div class="grid two">
-          <div class="card"><div class="card-body"><h3>Server Settings</h3><p>Set <code>PORT</code>, <code>ADMIN_ID</code>, and <code>ADMIN_PASSWORD</code> as environment variables before starting the Node server. Current local defaults are <code>admin</code> / <code>admin123</code> unless changed.</p></div></div>
+          <div class="card"><div class="card-body"><h3>Server Settings</h3><p>Set <code>PORT</code>, <code>ADMIN_ID</code>, and <code>ADMIN_PASSWORD</code> as environment variables before starting the Node server. Do not use the old default password in production.</p></div></div>
           <div class="card"><div class="card-body"><h3>Auto Reply Message</h3><p>Thank you. I will call you back shortly.</p><p class="helper">This default message is sent once when a visitor starts a live chat.</p></div></div>
         </div>`;
       return;

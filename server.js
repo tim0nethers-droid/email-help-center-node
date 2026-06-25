@@ -7,8 +7,7 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-const FALLBACK_ADMIN_PASSWORD_HASH = "e6178ee9cbe89eae6fbf0eacf486575697dc7a04dbd5e798a7b24c4939bf95c6";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "EmailHelp@2026#Admin!";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
@@ -165,8 +164,7 @@ function createSession() {
 }
 
 function isValidAdminLogin(adminId, password) {
-  const passwordHash = crypto.createHash("sha256").update(password).digest("hex");
-  return (adminId === ADMIN_ID || adminId === "admin") && (password === ADMIN_PASSWORD || passwordHash === FALLBACK_ADMIN_PASSWORD_HASH);
+  return adminId === ADMIN_ID && password === ADMIN_PASSWORD;
 }
 
 function isAuthed(req) {
@@ -977,7 +975,7 @@ ensureDataFiles()
     server.listen(PORT, () => {
       console.log(`Email Help Center running at http://localhost:${PORT}`);
       console.log("Admin login: /admin/login");
-      console.log("Default ADMIN_ID is admin and ADMIN_PASSWORD is admin123. Change both before production use.");
+      console.log("Default ADMIN_ID is admin. Set ADMIN_PASSWORD on the server before production use.");
     });
   })
   .catch((error) => {
