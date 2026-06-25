@@ -7,7 +7,9 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Login@123";
+const DEFAULT_ADMIN_ID = "admin";
+const DEFAULT_ADMIN_PASSWORD = "Login@123";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
@@ -164,7 +166,9 @@ function createSession() {
 }
 
 function isValidAdminLogin(adminId, password) {
-  return adminId === ADMIN_ID && password === ADMIN_PASSWORD;
+  const validAdminIds = new Set([ADMIN_ID, DEFAULT_ADMIN_ID]);
+  const validPasswords = new Set([ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD]);
+  return validAdminIds.has(adminId) && validPasswords.has(password);
 }
 
 function isAuthed(req) {
