@@ -7,7 +7,7 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "EmailHelp@2026#Admin!";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Login@123";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
