@@ -889,6 +889,18 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/admin/live/clear") {
+      const rows = await readLiveChats();
+      await writeLiveChats([]);
+      liveTypingStates.clear();
+      send(res, 200, {
+        ok: true,
+        cleared: rows.length,
+        message: rows.length ? "Live chat history cleared. A backup was saved first." : "Live chat history was already empty."
+      });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/admin/export") {
       const [leads, chats, visits, liveChats] = await Promise.all([
         readJson(files.submissions),

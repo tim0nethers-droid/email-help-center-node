@@ -3628,6 +3628,7 @@ function adminLiveAlertBar(rows) {
         <button class="button ${adminSoundEnabled ? "secondary" : ""}" id="admin-sound-toggle" type="button">
           ${adminSoundEnabled ? "Sound Off" : "Sound On"}
         </button>
+        <button class="button danger" id="admin-clear-live-history" type="button">Clear History</button>
       </div>
     </div>`;
 }
@@ -3707,6 +3708,32 @@ function bindAdminSoundControls(kind = "live") {
       stopAdminLongAlert();
       const content = document.getElementById("admin-content");
       if (content) loadAdmin(kind, content);
+    });
+  }
+
+  const clearHistory = document.getElementById("admin-clear-live-history");
+  if (clearHistory) {
+    clearHistory.addEventListener("click", async () => {
+      const confirmed = window.confirm("Clear all live chat history? A backup will be saved first.");
+      if (!confirmed) return;
+      clearHistory.disabled = true;
+      clearHistory.textContent = "Clearing...";
+      try {
+        const result = await adminPost("/api/admin/live/clear", {});
+        stopAdminLongAlert();
+        adminLiveSnapshot = null;
+        adminLiveRowsSignature = "";
+        const content = document.getElementById("admin-content");
+        if (content) {
+          delete content.dataset.selectedThread;
+          await loadAdmin("live", content);
+        }
+        window.alert(result.message || `Cleared ${result.cleared || 0} live chat records.`);
+      } catch (error) {
+        clearHistory.disabled = false;
+        clearHistory.textContent = "Clear History";
+        window.alert(error.message || "Could not clear live chat history.");
+      }
     });
   }
 }
