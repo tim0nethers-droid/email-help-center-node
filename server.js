@@ -231,6 +231,28 @@ function validPhone(value) {
   return /^[+\d][\d\s().-]{6,24}$/.test(String(value || ""));
 }
 
+function providerNameFromSource(sourcePage = "") {
+  try {
+    const parsed = new URL(sourcePage, "http://localhost");
+    const provider = cleanText(parsed.searchParams.get("provider"), 120).toLowerCase();
+    const map = {
+      "gmail.com": "Gmail",
+      gmail: "Gmail",
+      "icloud.com": "iCloud Mail",
+      icloud: "iCloud Mail",
+      "yahoo.com": "Yahoo Mail",
+      yahoo: "Yahoo Mail",
+      "outlook.com": "Outlook",
+      outlook: "Outlook",
+      "aol.com": "AOL Mail",
+      aol: "AOL Mail"
+    };
+    return map[provider] || "";
+  } catch {
+    return "";
+  }
+}
+
 function getClientIp(req) {
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0].trim();
@@ -565,12 +587,12 @@ async function handleApi(req, res, url) {
     const name = cleanText(body.name, 120);
     const phone = cleanText(body.phone, 40);
     const email = cleanText(body.email, 180);
-    const company = cleanText(body.company, 120);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
+    const company = cleanText(body.company, 120) || providerNameFromSource(sourcePage) || "Email Help";
     const issue = redactSecrets(body.issue || body.message);
 
-    if (!name || !phone || !email || !company || !issue) {
-      jsonError(res, 400, "Name, phone, email, company, and issue are required.");
+    if (!name || !phone || !email || !issue) {
+      jsonError(res, 400, "Name, phone, email, and issue are required.");
       return;
     }
 

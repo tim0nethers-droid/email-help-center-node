@@ -2363,6 +2363,12 @@ function bindChat() {
       try {
         event.preventDefault();
         if (leadForm.dataset.submitting === "1") return;
+        if (!leadForm.checkValidity()) {
+          leadForm.reportValidity();
+          const firstInvalid = leadForm.querySelector(":invalid");
+          if (firstInvalid) firstInvalid.focus();
+          return;
+        }
         leadForm.dataset.submitting = "1";
         if (statusEl) statusEl.textContent = "Starting chat...";
         const data = Object.fromEntries(new FormData(leadForm).entries());
@@ -2465,6 +2471,20 @@ function bindChat() {
             if (json.thread?.id) {
               state.sessionId = json.thread.id;
               setCurrentLiveChatSession(json.thread.id);
+              history = (json.thread.messages || []).map((message) => ({
+                role: message.from === "visitor" ? "user" : "bot",
+                text: message.text || ""
+              }));
+              const syncedWindow = document.getElementById("chat-window");
+              if (syncedWindow) {
+                syncedWindow.innerHTML = history
+                  .map(
+                    (message) =>
+                      `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
+                  )
+                  .join("");
+                syncedWindow.scrollTop = syncedWindow.scrollHeight;
+              }
               persist();
             }
           }
@@ -2948,7 +2968,7 @@ function bindLiveChatWidget() {
       if (visitorTypingTimer) clearTimeout(visitorTypingTimer);
       await sendVisitorTyping(false);
       try {
-        const response = await fetch("/api/live/message", {
+        const response = await fetch(apiUrl("/api/live/message"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId: currentLiveChatSession(), message })
@@ -2984,7 +3004,7 @@ function bindLiveChatWidget() {
     try {
       const activeInput = document.activeElement?.id === "live-chat-message" ? document.getElementById("live-chat-message") : null;
       const draft = activeInput?.value || "";
-      const response = await fetch(`/api/live/thread?sessionId=${encodeURIComponent(sessionId)}`);
+      const response = await fetch(apiUrl(`/api/live/thread?sessionId=${encodeURIComponent(sessionId)}`));
       const json = await readApiJson(response);
       if (!response.ok) throw new Error(json.error || "Could not load live chat.");
       if (json.thread?.visitor?.profileComplete === false && !(json.thread?.messages || []).length) {
