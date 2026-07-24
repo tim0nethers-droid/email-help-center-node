@@ -932,6 +932,35 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/admin/live/delete") {
+      const body = await readBody(req);
+      const ids = Array.isArray(body.ids)
+        ? [...new Set(body.ids.map((id) => cleanText(id, 120)).filter(Boolean))]
+        : [];
+      if (!ids.length) {
+        jsonError(res, 400, "Select at least one live chat to delete.");
+        return;
+      }
+
+      const rows = await readLiveChats();
+      const idSet = new Set(ids);
+      const remainingRows = rows.filter((row) => !idSet.has(row.id));
+      const deleted = rows.length - remainingRows.length;
+      if (!deleted) {
+        jsonError(res, 404, "Selected live chats were not found.");
+        return;
+      }
+
+      await writeLiveChats(remainingRows);
+      ids.forEach((id) => liveTypingStates.delete(id));
+      send(res, 200, {
+        ok: true,
+        deleted,
+        message: `${deleted} live chat${deleted === 1 ? "" : "s"} deleted. A backup was saved first.`
+      });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/admin/live/clear") {
       const rows = await readLiveChats();
       await writeLiveChats([]);

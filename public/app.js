@@ -3280,6 +3280,14 @@ function adminChatList(rows, selectedId) {
           <h2>Inbox</h2>
           <p>${rows.length} active thread${rows.length === 1 ? "" : "s"}</p>
         </div>
+        ${
+          rows.length
+            ? `<div class="admin-chat-bulk-actions">
+                <label><input type="checkbox" id="admin-live-select-all"> Select all</label>
+                <button class="button danger small" id="admin-live-delete-selected" type="button" disabled>Delete Selected</button>
+              </div>`
+            : ""
+        }
       </div>
       <div class="admin-chat-list">
         ${
@@ -3295,19 +3303,24 @@ function adminChatList(rows, selectedId) {
                     .join("")
                     .toUpperCase();
                   return `
-                    <button class="admin-chat-list-item ${row.id === selectedId ? "active" : ""}" type="button" data-live-thread="${row.id}" data-thread-id="${row.id}">
-                      <span class="admin-chat-avatar tone-${(index % 4) + 1}">${escapeHtml(initials || "V")}</span>
-                      <span class="admin-chat-copy">
-                        <strong>${escapeHtml(visitorName)}</strong>
-                        <small>${escapeHtml(messagePreview(row.lastMessage))}</small>
-                        <span class="admin-chat-meta">
-                          <span class="status-pill ${statusClass}">${escapeHtml(row.status || "open")}</span>
-                          ${row.unread ? `<span class="unread-pill">${escapeHtml(row.unread)}</span>` : ""}
-                          <time>${lastActivityLabel(row.updatedAt)}</time>
+                    <div class="admin-chat-list-row ${row.id === selectedId ? "active" : ""}">
+                      <label class="admin-chat-select" aria-label="Select ${escapeHtml(visitorName)} chat">
+                        <input type="checkbox" data-live-select="${escapeHtml(row.id)}">
+                      </label>
+                      <button class="admin-chat-list-item ${row.id === selectedId ? "active" : ""}" type="button" data-live-thread="${escapeHtml(row.id)}" data-thread-id="${escapeHtml(row.id)}">
+                        <span class="admin-chat-avatar tone-${(index % 4) + 1}">${escapeHtml(initials || "V")}</span>
+                        <span class="admin-chat-copy">
+                          <strong>${escapeHtml(visitorName)}</strong>
+                          <small>${escapeHtml(messagePreview(row.lastMessage))}</small>
+                          <span class="admin-chat-meta">
+                            <span class="status-pill ${statusClass}">${escapeHtml(row.status || "open")}</span>
+                            ${row.unread ? `<span class="unread-pill">${escapeHtml(row.unread)}</span>` : ""}
+                            <time>${lastActivityLabel(row.updatedAt)}</time>
+                          </span>
                         </span>
-                      </span>
-                      <span class="admin-chat-chevron">${icons.chevron}</span>
-                    </button>`;
+                        <span class="admin-chat-chevron">${icons.chevron}</span>
+                      </button>
+                    </div>`;
                 })
                 .join("")
             : `<div class="empty-state">No live chat sessions yet.</div>`
@@ -4025,6 +4038,61 @@ async function openMobileChatModal(threadId, options = {}) {
 
 function bindAdminLiveInbox(content, selectedId, options = {}) {
   const initialLoad = options.initialLoad ?? true;
+  const updateBulkDeleteState = () => {
+    const selected = document.querySelectorAll("[data-live-select]:checked");
+    const deleteButton = document.getElementById("admin-live-delete-selected");
+    const selectAll = document.getElementById("admin-live-select-all");
+    const allBoxes = document.querySelectorAll("[data-live-select]");
+    if (deleteButton) {
+      deleteButton.disabled = selected.length === 0;
+      deleteButton.textContent = selected.length ? `Delete Selected (${selected.length})` : "Delete Selected";
+    }
+    if (selectAll) {
+      selectAll.checked = allBoxes.length > 0 && selected.length === allBoxes.length;
+      selectAll.indeterminate = selected.length > 0 && selected.length < allBoxes.length;
+    }
+  };
+
+  document.querySelectorAll("[data-live-select]").forEach((checkbox) => {
+    checkbox.addEventListener("click", (event) => event.stopPropagation());
+    checkbox.addEventListener("change", updateBulkDeleteState);
+  });
+
+  const selectAll = document.getElementById("admin-live-select-all");
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      document.querySelectorAll("[data-live-select]").forEach((checkbox) => {
+        checkbox.checked = selectAll.checked;
+      });
+      updateBulkDeleteState();
+    });
+  }
+
+  const deleteSelected = document.getElementById("admin-live-delete-selected");
+  if (deleteSelected) {
+    deleteSelected.addEventListener("click", async () => {
+      const ids = Array.from(document.querySelectorAll("[data-live-select]:checked")).map((checkbox) => checkbox.dataset.liveSelect);
+      if (!ids.length) return;
+      const confirmed = window.confirm(`Delete ${ids.length} selected chat${ids.length === 1 ? "" : "s"}? A backup will be saved first.`);
+      if (!confirmed) return;
+      deleteSelected.disabled = true;
+      deleteSelected.textContent = "Deleting...";
+      try {
+        const result = await adminPost("/api/admin/live/delete", { ids });
+        stopAdminLongAlert();
+        adminLiveSnapshot = null;
+        adminLiveRowsSignature = "";
+        if (ids.includes(content.dataset.selectedThread)) delete content.dataset.selectedThread;
+        await loadAdmin("live", content);
+        window.alert(result.message || `${result.deleted || ids.length} chat(s) deleted.`);
+      } catch (error) {
+        deleteSelected.disabled = false;
+        updateBulkDeleteState();
+        window.alert(error.message || "Could not delete selected chats.");
+      }
+    });
+  }
+
   document.querySelectorAll("[data-admin-live-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       const filter = button.dataset.adminLiveFilter || "all";

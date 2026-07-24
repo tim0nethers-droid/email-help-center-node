@@ -2520,6 +2520,24 @@ body.ai-chat-route .live-chat-widget {
   padding: 12px 14px;
 }
 
+.admin-chat-bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-chat-bulk-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .admin-chat-list-head h2 {
   margin: 0;
   font-size: 1rem;
@@ -2537,6 +2555,36 @@ body.ai-chat-route .live-chat-widget {
   padding: 10px;
   max-height: 780px;
   overflow-y: auto;
+}
+
+.admin-chat-list-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.admin-chat-select {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.admin-chat-select:hover,
+.admin-chat-list-row.active .admin-chat-select {
+  border-color: rgba(18, 103, 216, 0.4);
+  background: rgba(18, 103, 216, 0.05);
+}
+
+.admin-chat-select input,
+.admin-chat-bulk-actions input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
 }
 
 .admin-chat-list-item {
