@@ -966,7 +966,7 @@ function supportHub(provider = null) {
                     <input type="hidden" name="sourcePage" value="${escapeHtml(sourcePage)}">
                     <div class="form-row">
                       <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
-                      <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number" value="${escapeHtml(formValues.phone)}"></div>
+                      <div class="field"><label>Phone</label><input name="phone" inputmode="tel" pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone)}"></div>
                     </div>
                     <div class="form-row">
                       <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
@@ -1409,7 +1409,7 @@ function providerPage(provider) {
                       <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
                     </div>
                     <div class="form-row">
-                      <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" placeholder="Phone number" value="${escapeHtml(formValues.phone)}"></div>
+                      <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone)}"></div>
                       <div class="field"><label>Problem Type</label><select name="category" required><option value="">Select problem type</option><option>Login problem</option><option>Password reset guide</option><option>Not receiving emails</option><option>Email setup</option><option>Storage full</option><option>Account security</option><option>Other issue</option></select></div>
                     </div>
                     <div class="field"><label>Message</label><textarea name="message" required placeholder="Describe the issue. Do not include passwords, OTPs, private emails, or recovery codes.">${escapeHtml(formValues.issue)}</textarea></div>
@@ -1703,7 +1703,7 @@ function chatPage() {
                   <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(leadData.email || "")}"></div>
                 </div>
                 <div class="form-row single">
-                  <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required placeholder="Phone Number" value="${escapeHtml(leadData.phone || "")}"></div>
+                  <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(leadData.phone || "")}"></div>
                 </div>
                 <div class="form-row single">
                   <div class="field">
@@ -1815,7 +1815,7 @@ function contactPage() {
               <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
               <div class="form-row">
                 <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
-                <div class="field"><label>Phone</label><input name="phone" placeholder="Phone number" value="${escapeHtml(formValues.phone)}"></div>
+                <div class="field"><label>Phone</label><input name="phone" inputmode="tel" pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone)}"></div>
               </div>
               <div class="form-row">
                 <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
@@ -2810,7 +2810,7 @@ function bindLiveChatWidget() {
         <input type="hidden" name="sessionId" value="${escapeHtml(currentLiveChatSession())}">
         <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
         <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
-        <div class="field"><label>Phone</label><input name="phone" required inputmode="tel" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone)}"></div>
+        <div class="field"><label>Phone</label><input name="phone" required inputmode="tel" pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone)}"></div>
         <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
         <div class="field">
           <label>Company</label>

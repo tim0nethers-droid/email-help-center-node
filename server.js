@@ -16,7 +16,7 @@ const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
-const dataDir = path.join(rootDir, "data");
+const dataDir = process.env.EHC_DATA_DIR ? path.resolve(process.env.EHC_DATA_DIR) : path.join(rootDir, "data");
 const backupDir = path.join(dataDir, "backups");
 
 const files = {
@@ -228,7 +228,13 @@ function validEmail(value) {
 }
 
 function validPhone(value) {
-  return /^[+\d][\d\s().-]{6,24}$/.test(String(value || ""));
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  if (!/^[+\d\s().-]+$/.test(raw)) return false;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length !== 11 || !digits.startsWith("1")) return false;
+  const national = digits.slice(1);
+  return /^[2-9]\d{2}[2-9]\d{6}$/.test(national);
 }
 
 function providerNameFromSource(sourcePage = "") {
@@ -527,7 +533,7 @@ async function handleApi(req, res, url) {
     }
 
     if (phone && !validPhone(phone)) {
-      jsonError(res, 400, "Enter a valid phone number.");
+      jsonError(res, 400, "Enter a valid US or Canada phone number.");
       return;
     }
 
@@ -597,7 +603,7 @@ async function handleApi(req, res, url) {
     }
 
     if (!validPhone(phone)) {
-      jsonError(res, 400, "Enter a valid phone number.");
+      jsonError(res, 400, "Enter a valid US or Canada phone number.");
       return;
     }
 
