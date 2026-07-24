@@ -16,7 +16,13 @@ const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
-const dataDir = process.env.EHC_DATA_DIR ? path.resolve(process.env.EHC_DATA_DIR) : path.join(rootDir, "data");
+const bundledDataDir = path.join(rootDir, "data");
+const hostHomeDataDir = process.env.HOME && process.env.HOME.startsWith("/home/")
+  ? path.join(process.env.HOME, "email-help-center-data")
+  : "";
+const dataDir = process.env.EHC_DATA_DIR
+  ? path.resolve(process.env.EHC_DATA_DIR)
+  : hostHomeDataDir || bundledDataDir;
 const backupDir = path.join(dataDir, "backups");
 
 const files = {
@@ -49,6 +55,15 @@ async function ensureDataFiles() {
       try {
         await fsp.access(file);
       } catch {
+        const sourceFile = path.join(bundledDataDir, path.basename(file));
+        if (sourceFile !== file) {
+          try {
+            await fsp.copyFile(sourceFile, file);
+            return;
+          } catch {
+            // No bundled data file exists yet. Create a fresh data file below.
+          }
+        }
         await fsp.writeFile(file, "[]\n", "utf8");
       }
     })
