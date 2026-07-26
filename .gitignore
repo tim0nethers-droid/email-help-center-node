@@ -3,3 +3,5 @@ data/backups/
 data-backup-before-recovery-*/
 *.log
 node_modules/
+.idea/
+exports/

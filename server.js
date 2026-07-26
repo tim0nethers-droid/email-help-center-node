@@ -7,10 +7,13 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
-const DEFAULT_ADMIN_ID = "admin";
 const DEFAULT_ADMIN_PASSWORD = "Login@123";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
+const LOGIN_WINDOW_MS = 1000 * 60 * 15;
+const LOGIN_MAX_ATTEMPTS = 5;
+const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
 
@@ -33,6 +36,8 @@ const files = {
 };
 
 const sessions = new Map();
+const loginAttempts = new Map();
+const mutationQueues = new Map();
 const liveTypingStates = new Map();
 const TYPING_TTL_MS = 2500;
 
@@ -47,6 +52,21 @@ const mimeTypes = {
   ".svg": "image/svg+xml; charset=utf-8",
   ".ico": "image/x-icon"
 };
+
+function securityHeaders() {
+  return {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+  };
+}
+
+function validateConfiguration() {
+  if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) {
+    throw new Error("ADMIN_PASSWORD must be changed before starting in production.");
+  }
+}
 
 async function ensureDataFiles() {
   await fsp.mkdir(dataDir, { recursive: true });
@@ -100,6 +120,17 @@ async function writeJson(file, value) {
   throw lastError;
 }
 
+async function withMutationLock(key, operation) {
+  const previous = mutationQueues.get(key) || Promise.resolve();
+  const current = previous.catch(() => {}).then(operation);
+  mutationQueues.set(key, current);
+  try {
+    return await current;
+  } finally {
+    if (mutationQueues.get(key) === current) mutationQueues.delete(key);
+  }
+}
+
 function backupTimestamp() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, "0");
@@ -136,10 +167,12 @@ async function backupLiveChatsFile() {
 }
 
 async function appendJson(file, item) {
-  const rows = await readJson(file);
-  rows.unshift(item);
-  await writeJson(file, rows.slice(0, 1000));
-  return item;
+  return withMutationLock(file, async () => {
+    const rows = await readJson(file);
+    rows.unshift(item);
+    await writeJson(file, rows.slice(0, 1000));
+    return item;
+  });
 }
 
 function send(res, status, body, contentType = "application/json; charset=utf-8", headers = {}) {
@@ -147,9 +180,7 @@ function send(res, status, body, contentType = "application/json; charset=utf-8"
   res.writeHead(status, {
     "Content-Type": contentType,
     "Content-Length": Buffer.byteLength(payload),
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    ...securityHeaders(),
     ...headers
   });
   res.end(payload);
@@ -175,15 +206,59 @@ function parseCookies(req) {
 }
 
 function createSession() {
+  const now = Date.now();
+  for (const [existingToken, session] of sessions.entries()) {
+    if (session.expiresAt < now) sessions.delete(existingToken);
+  }
   const token = crypto.randomBytes(32).toString("hex");
-  sessions.set(token, { createdAt: Date.now(), expiresAt: Date.now() + SESSION_TTL_MS });
+  sessions.set(token, { createdAt: now, expiresAt: now + SESSION_TTL_MS });
   return token;
 }
 
 function isValidAdminLogin(adminId, password) {
-  const validAdminIds = new Set([ADMIN_ID, DEFAULT_ADMIN_ID]);
-  const validPasswords = new Set([ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD]);
-  return validAdminIds.has(adminId) && validPasswords.has(password);
+  const suppliedId = Buffer.from(String(adminId || ""));
+  const expectedId = Buffer.from(ADMIN_ID);
+  const suppliedPassword = Buffer.from(String(password || ""));
+  const expectedPassword = Buffer.from(ADMIN_PASSWORD);
+  return suppliedId.length === expectedId.length &&
+    suppliedPassword.length === expectedPassword.length &&
+    crypto.timingSafeEqual(suppliedId, expectedId) &&
+    crypto.timingSafeEqual(suppliedPassword, expectedPassword);
+}
+
+function sessionCookie(req, token, maxAgeSeconds) {
+  const forwardedProto = TRUST_PROXY ? String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() : "";
+  const secure = Boolean(req.socket.encrypted) || forwardedProto === "https" || IS_PRODUCTION;
+  return `ehc_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAgeSeconds}${secure ? "; Secure" : ""}`;
+}
+
+function loginRateLimitKey(req) {
+  return getClientIp(req) || "unknown";
+}
+
+function loginAttemptState(req) {
+  const key = loginRateLimitKey(req);
+  const now = Date.now();
+  for (const [existingKey, attempt] of loginAttempts.entries()) {
+    if (attempt.resetAt <= now) loginAttempts.delete(existingKey);
+  }
+  const existing = loginAttempts.get(key);
+  if (!existing || existing.resetAt <= now) {
+    const fresh = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    loginAttempts.set(key, fresh);
+    return { key, state: fresh };
+  }
+  return { key, state: existing };
+}
+
+function recordFailedLogin(req) {
+  const attempt = loginAttemptState(req);
+  attempt.state.count += 1;
+  return attempt.state;
+}
+
+function clearLoginAttempts(req) {
+  loginAttempts.delete(loginRateLimitKey(req));
 }
 
 function isAuthed(req) {
@@ -275,7 +350,7 @@ function providerNameFromSource(sourcePage = "") {
 }
 
 function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
+  const forwarded = TRUST_PROXY ? req.headers["x-forwarded-for"] : "";
   if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0].trim();
   return req.socket.remoteAddress || "";
 }
@@ -516,14 +591,16 @@ function addAutoReplyIfMissing(thread) {
 }
 
 async function updateLiveChat(threadId, updater) {
-  const rows = await readLiveChats();
-  const index = rows.findIndex((thread) => thread.id === threadId);
-  if (index === -1) return null;
-  const updated = updater(rows[index]);
-  rows[index] = updated;
-  rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  await writeLiveChats(rows);
-  return updated;
+  return withMutationLock(files.liveChats, async () => {
+    const rows = await readLiveChats();
+    const index = rows.findIndex((thread) => thread.id === threadId);
+    if (index === -1) return null;
+    const updated = updater(rows[index]);
+    rows[index] = updated;
+    rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    await writeLiveChats(rows);
+    return updated;
+  });
 }
 
 async function handleApi(req, res, url) {
@@ -648,29 +725,32 @@ async function handleApi(req, res, url) {
         )
       ];
 
-    const rows = await readLiveChats();
-    const existingIndex = rows.findIndex((row) => row.id === sessionId);
-    let thread;
-    if (existingIndex !== -1) {
-      thread = rows[existingIndex];
-      const hadVisitorMessages = (thread.messages || []).some((message) => message.from === "visitor");
-      thread.visitor = { name, phone, email, company, issue, sourcePage, profileComplete: true };
-      thread.status = "open";
-      thread.updatedAt = new Date().toISOString();
-      thread.messages = Array.isArray(thread.messages) ? thread.messages : [];
-      if (!thread.messages.length) {
-        thread.messages = initialMessages;
-      } else if (!hadVisitorMessages) {
-        thread.messages.unshift(visitorMessage);
+    const thread = await withMutationLock(files.liveChats, async () => {
+      const rows = await readLiveChats();
+      const existingIndex = rows.findIndex((row) => row.id === sessionId);
+      let nextThread;
+      if (existingIndex !== -1) {
+        nextThread = rows[existingIndex];
+        const hadVisitorMessages = (nextThread.messages || []).some((message) => message.from === "visitor");
+        nextThread.visitor = { name, phone, email, company, issue, sourcePage, profileComplete: true };
+        nextThread.status = "open";
+        nextThread.updatedAt = new Date().toISOString();
+        nextThread.messages = Array.isArray(nextThread.messages) ? nextThread.messages : [];
+        if (!nextThread.messages.length) {
+          nextThread.messages = initialMessages;
+        } else if (!hadVisitorMessages) {
+          nextThread.messages.unshift(visitorMessage);
+        }
+        addAutoReplyIfMissing(nextThread);
+        rows[existingIndex] = nextThread;
+        rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+      } else {
+        nextThread = createLiveThread(req, { name, phone, email, company, issue, sourcePage, profileComplete: true }, initialMessages);
+        rows.unshift(nextThread);
       }
-      addAutoReplyIfMissing(thread);
-      rows[existingIndex] = thread;
-      rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-    } else {
-      thread = createLiveThread(req, { name, phone, email, company, issue, sourcePage, profileComplete: true }, initialMessages);
-      rows.unshift(thread);
-    }
-    await writeLiveChats(rows);
+      await writeLiveChats(rows);
+      return nextThread;
+    });
     send(res, 201, { ok: true, thread: publicLiveThread(thread) });
     return;
   }
@@ -679,20 +759,26 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const sessionId = cleanText(body.sessionId, 120);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
-    const rows = await readLiveChats();
-    let thread = rows.find((row) => row.id === sessionId);
-    if (thread) {
-      thread.status = "open";
-      thread.updatedAt = new Date().toISOString();
-      thread.visitor = { ...(thread.visitor || {}), sourcePage: thread.visitor?.sourcePage || sourcePage };
+    const result = await withMutationLock(files.liveChats, async () => {
+      const rows = await readLiveChats();
+      let thread = rows.find((row) => row.id === sessionId);
+      if (thread) {
+        thread.status = "open";
+        thread.updatedAt = new Date().toISOString();
+        thread.visitor = { ...(thread.visitor || {}), sourcePage: thread.visitor?.sourcePage || sourcePage };
+        await writeLiveChats(rows);
+        return { thread, created: false };
+      }
+      thread = createLiveThread(req, { sourcePage, profileComplete: false }, []);
+      rows.unshift(thread);
       await writeLiveChats(rows);
-      send(res, 200, { ok: true, thread: publicLiveThread(thread), created: false });
-      return;
-    }
-    thread = createLiveThread(req, { sourcePage, profileComplete: false }, []);
-    rows.unshift(thread);
-    await writeLiveChats(rows);
-    send(res, 201, { ok: true, thread: publicLiveThread(thread), created: true });
+      return { thread, created: true };
+    });
+    send(res, result.created ? 201 : 200, {
+      ok: true,
+      thread: publicLiveThread(result.thread),
+      created: result.created
+    });
     return;
   }
 
@@ -770,12 +856,26 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/login") {
+    const attempt = loginAttemptState(req);
+    if (attempt.state.count >= LOGIN_MAX_ATTEMPTS) {
+      const retryAfter = Math.max(1, Math.ceil((attempt.state.resetAt - Date.now()) / 1000));
+      send(
+        res,
+        429,
+        { ok: false, error: "Too many login attempts. Try again later." },
+        "application/json; charset=utf-8",
+        { "Retry-After": String(retryAfter) }
+      );
+      return;
+    }
     const body = await readBody(req);
     const adminId = cleanText(body.adminId || body.username || body.id, 120);
     if (!isValidAdminLogin(adminId, cleanText(body.password, 200))) {
+      recordFailedLogin(req);
       jsonError(res, 401, "Invalid admin ID or password.");
       return;
     }
+    clearLoginAttempts(req);
     const token = createSession();
     send(
       res,
@@ -783,9 +883,7 @@ async function handleApi(req, res, url) {
       { ok: true },
       "application/json; charset=utf-8",
       {
-        "Set-Cookie": `ehc_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(
-          SESSION_TTL_MS / 1000
-        )}`
+        "Set-Cookie": sessionCookie(req, token, Math.floor(SESSION_TTL_MS / 1000))
       }
     );
     return;
@@ -795,7 +893,7 @@ async function handleApi(req, res, url) {
     const token = parseCookies(req).ehc_session;
     if (token) sessions.delete(token);
     send(res, 200, { ok: true }, "application/json; charset=utf-8", {
-      "Set-Cookie": "ehc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+      "Set-Cookie": sessionCookie(req, "", 0)
     });
     return;
   }
@@ -942,16 +1040,19 @@ async function handleApi(req, res, url) {
         return;
       }
 
-      const rows = await readLiveChats();
-      const idSet = new Set(ids);
-      const remainingRows = rows.filter((row) => !idSet.has(row.id));
-      const deleted = rows.length - remainingRows.length;
+      const deleted = await withMutationLock(files.liveChats, async () => {
+        const rows = await readLiveChats();
+        const idSet = new Set(ids);
+        const remainingRows = rows.filter((row) => !idSet.has(row.id));
+        const deletedCount = rows.length - remainingRows.length;
+        if (deletedCount) await writeLiveChats(remainingRows);
+        return deletedCount;
+      });
       if (!deleted) {
         jsonError(res, 404, "Selected live chats were not found.");
         return;
       }
 
-      await writeLiveChats(remainingRows);
       ids.forEach((id) => liveTypingStates.delete(id));
       send(res, 200, {
         ok: true,
@@ -962,13 +1063,16 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "POST" && url.pathname === "/api/admin/live/clear") {
-      const rows = await readLiveChats();
-      await writeLiveChats([]);
+      const cleared = await withMutationLock(files.liveChats, async () => {
+        const rows = await readLiveChats();
+        await writeLiveChats([]);
+        return rows.length;
+      });
       liveTypingStates.clear();
       send(res, 200, {
         ok: true,
-        cleared: rows.length,
-        message: rows.length ? "Live chat history cleared. A backup was saved first." : "Live chat history was already empty."
+        cleared,
+        message: cleared ? "Live chat history cleared. A backup was saved first." : "Live chat history was already empty."
       });
       return;
     }
@@ -1034,12 +1138,17 @@ async function serveStaticOrApp(req, res, url) {
     const cacheControl = [".html", ".css", ".js"].includes(ext) ? "no-cache" : "public, max-age=3600";
     res.writeHead(200, {
       "Content-Type": mimeTypes[ext] || "application/octet-stream",
-      "Cache-Control": cacheControl
+      "Cache-Control": cacheControl,
+      ...securityHeaders()
     });
     res.end(data);
   } catch {
     const app = await fsp.readFile(path.join(publicDir, "index.html"));
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache",
+      ...securityHeaders()
+    });
     res.end(app);
   }
 }
@@ -1058,15 +1167,33 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-ensureDataFiles()
-  .then(() => {
-    server.listen(PORT, () => {
+async function startServer() {
+  validateConfiguration();
+  await ensureDataFiles();
+  await new Promise((resolve, reject) => {
+    const handleError = (error) => {
+      server.off("listening", handleListening);
+      reject(error);
+    };
+    const handleListening = () => {
+      server.off("error", handleError);
       console.log(`Email Help Center running at http://localhost:${PORT}`);
       console.log("Admin login: /admin/login");
       console.log("Default ADMIN_ID is admin. Set ADMIN_PASSWORD on the server before production use.");
-    });
-  })
-  .catch((error) => {
-    console.error("Failed to initialize data files", error);
+      resolve();
+    };
+    server.once("error", handleError);
+    server.once("listening", handleListening);
+    server.listen(PORT);
+  });
+  return server;
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error("Failed to start server", error);
     process.exit(1);
   });
+}
+
+module.exports = { server, startServer };

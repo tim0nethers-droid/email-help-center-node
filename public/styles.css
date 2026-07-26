@@ -1600,6 +1600,16 @@ textarea::placeholder {
   padding: 0 16px 16px;
 }
 
+.ai-chat-sync-status {
+  min-height: 20px;
+  padding: 2px 16px 8px;
+  text-align: center;
+}
+
+.ai-chat-sync-status.error {
+  color: #b91c1c;
+}
+
 .ai-chat-start-shell {
   display: grid;
   grid-template-columns: minmax(0, 420px);

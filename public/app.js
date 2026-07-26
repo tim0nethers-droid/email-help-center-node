@@ -647,6 +647,7 @@ const faqItems = [
 let currentLanguage = localStorage.getItem("ehc_language") || "en";
 let mobileOpen = false;
 let liveChatPollTimer = null;
+let aiChatPollTimer = null;
 let adminLivePollTimer = null;
 let adminLiveSnapshot = null;
 let adminLiveRowsSignature = "";
@@ -1661,6 +1662,7 @@ function chatPage() {
                   </div>
                 </div>
                 <div class="ai-chat-live-status"><i></i> Online</div>
+                <button class="button ghost small" type="button" data-chat-reset>New Chat</button>
               </div>
               <div id="chat-window" class="chat-window ai-chat-window"></div>
               <div class="quick-reply-row quick-replies">
@@ -1674,6 +1676,7 @@ function chatPage() {
                 <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
                 <button class="button" type="submit">${icons.reply}Send</button>
               </form>
+              <div id="chat-sync-status" class="helper ai-chat-sync-status" aria-live="polite"></div>
               <div class="ai-chat-note">AI assistant online &bull; Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
             </div>
           </div>
@@ -2150,7 +2153,11 @@ function bindGlobalEvents() {
 
 function bindPageEvents() {
   if (liveChatPollTimer) clearInterval(liveChatPollTimer);
+  if (aiChatPollTimer) clearInterval(aiChatPollTimer);
   if (adminLivePollTimer) clearInterval(adminLivePollTimer);
+  liveChatPollTimer = null;
+  aiChatPollTimer = null;
+  adminLivePollTimer = null;
   if (visitorTypingTimer) clearTimeout(visitorTypingTimer);
   if (adminAgentTypingTimer) clearTimeout(adminAgentTypingTimer);
   visitorTypingTimer = null;
@@ -2312,8 +2319,6 @@ function bindChat() {
   const providerName = page?.dataset.chatProvider || "Email Help";
   const issue = page?.dataset.chatIssue || "";
   const chatProvider = chatProviderFromQuery() || { id: "gmail", name: providerName, slug: "gmail.com" };
-  const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
-  const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
   const providerDomain = providerChatDomain(chatProviderFromQuery()) || "gmail.com";
   const stateKey = chatStateKey(providerDomain);
   const initialState = readLocalJson(stateKey, { started: false, leadData: null, messages: [], sessionId: "" });
@@ -2334,6 +2339,25 @@ function bindChat() {
     writeChatState(providerDomain, state);
   };
 
+  const threadHistory = (thread) =>
+    (thread?.messages || []).map((message) => ({
+      id: message.id || "",
+      role: message.from === "visitor" ? "user" : "bot",
+      text: message.text || "",
+      createdAt: message.createdAt || ""
+    }));
+
+  const historySignature = (messages) =>
+    messages.map((message) => `${message.id || ""}:${message.role}:${message.text}`).join("|");
+
+  const setSyncStatus = (message = "", isError = false, kind = "") => {
+    const status = document.getElementById("chat-sync-status");
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("error", isError);
+    status.dataset.kind = kind;
+  };
+
   const draw = () => {
     if (!windowEl) return;
     windowEl.innerHTML = history
@@ -2346,8 +2370,61 @@ function bindChat() {
     persist();
   };
 
+  const applyServerThread = (thread) => {
+    if (!thread?.id) return;
+    const nextHistory = threadHistory(thread);
+    state.sessionId = thread.id;
+    setCurrentLiveChatSession(thread.id);
+    if (historySignature(nextHistory) !== historySignature(history)) {
+      history = nextHistory;
+      draw();
+    } else {
+      persist();
+    }
+  };
+
+  let syncInFlight = false;
+  const syncServerThread = async () => {
+    if (syncInFlight || !state.sessionId) return;
+    syncInFlight = true;
+    try {
+      const response = await fetch(apiUrl(`/api/live/thread?sessionId=${encodeURIComponent(state.sessionId)}`));
+      const json = await readApiJson(response);
+      if (!response.ok) throw new Error(json.error || "Could not refresh chat.");
+      applyServerThread(json.thread);
+      if (document.getElementById("chat-sync-status")?.dataset.kind === "sync") {
+        setSyncStatus("");
+      }
+    } catch (error) {
+      if (document.getElementById("chat-sync-status")?.dataset.kind !== "send") {
+        setSyncStatus(`${error.message || "Connection problem."} Retrying...`, true, "sync");
+      }
+    } finally {
+      syncInFlight = false;
+    }
+  };
+
+  const startAiChatPolling = () => {
+    if (aiChatPollTimer) clearInterval(aiChatPollTimer);
+    if (!state.sessionId) return;
+    aiChatPollTimer = setInterval(() => {
+      if (!window.location.pathname.startsWith("/ai/chat")) return;
+      syncServerThread();
+    }, 2500);
+  };
+
   const input = document.getElementById("chat-input");
   if (input && issue && !input.value) input.value = issue;
+
+  document.querySelector("[data-chat-back]")?.addEventListener("click", () => {
+    navigate(`/provider/${chatProvider.id}`);
+  });
+
+  document.querySelector("[data-chat-reset]")?.addEventListener("click", () => {
+    writeChatState(providerDomain, { started: false, leadData: null, messages: [], sessionId: "" });
+    setCurrentLiveChatSession("");
+    render();
+  });
 
   if (page?.dataset.chatStarted === "true" && windowEl && form) {
     if (!history.length) {
@@ -2385,113 +2462,35 @@ function bindChat() {
           phone: lead.phone,
           company: String(data.company || chatProvider.name || "").trim() || chatProvider.name
         });
-        const sessionId = state.sessionId || currentLiveChatSession() || chatSessionId();
+        const response = await fetch(apiUrl("/api/live/start"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: state.sessionId || currentLiveChatSession() || chatSessionId(),
+            name: lead.name,
+            phone: lead.phone,
+            email: lead.email,
+            company: String(data.company || providerName).trim() || providerName,
+            issue: lead.issue || issue,
+            message: lead.message || lead.issue,
+            sourcePage: window.location.href
+          })
+        });
+        const json = await readApiJson(response);
+        if (!response.ok) throw new Error(json.error || "Could not start chat.");
+        if (!json.thread?.id) throw new Error("Chat server did not return a session.");
+
+        history = threadHistory(json.thread);
         state = {
           started: true,
           leadData: lead,
-          sessionId,
-          messages: [
-            { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
-            { role: "bot", text: chatFollowupMessage(providerName, lead) }
-          ]
+          sessionId: json.thread.id,
+          messages: history
         };
-        history = [
-          { role: "user", text: lead.issue || lead.message || "I need help with Gmail." },
-          { role: "bot", text: chatFollowupMessage(providerName, lead) }
-        ];
+        setCurrentLiveChatSession(json.thread.id);
         persist();
-        const liveHtml = `
-        <main id="main" class="page ai-chat-page" data-chat-provider="${escapeHtml(chatProvider.name)}" data-chat-issue="${escapeHtml(lead.issue || issue || "")}" data-chat-started="true">
-          <section class="section ai-chat-section">
-            <div class="container ai-chat-start-shell ai-chat-transition-shell">
-              <div class="card ai-chat-start-card ai-chat-live-card">
-                <div class="card-body">
-                  <div class="ai-chat-live-topbar">
-                    <button class="ai-chat-back" type="button" data-chat-back aria-label="Back to ${escapeHtml(chatProvider.name)} provider page">${icons.chevron}</button>
-                    <div class="ai-chat-live-brand">
-                      <div class="ai-chat-live-icon">${providerLogo ? `<img src="${escapeHtml(providerLogo)}" alt="${escapeHtml(chatProvider.name)}">` : icons.bot}</div>
-                      <div>
-                        <strong>${escapeHtml(chatProvider.name)} Help</strong>
-                        <span>Independent</span>
-                        <small><i></i> Online &bull; ${escapeHtml(lead.name || "Visitor")}</small>
-                      </div>
-                    </div>
-                    <div class="ai-chat-live-status"><i></i> Online</div>
-                  </div>
-                  <div id="chat-window" class="chat-window ai-chat-window"></div>
-                  <div class="quick-reply-row quick-replies">
-                    ${quickReplies
-                      .map((prompt) =>
-                        `<button class="quick-reply-btn quick-prompt" type="button" data-prompt="${escapeHtml(prompt)}">${prompt === "Request Callback" ? `${icons.phone}<span>${escapeHtml(prompt)}</span>` : escapeHtml(prompt)}</button>`
-                      )
-                      .join("")}
-                  </div>
-                  <form class="chat-form" id="chat-form">
-                    <input id="chat-input" type="text" placeholder="Type your reply..." autocomplete="off" />
-                    <button class="button" type="submit">${icons.reply}Send</button>
-                  </form>
-                  <div class="ai-chat-note">AI assistant online &bull; Independent resource, not affiliated with ${escapeHtml(chatProvider.name)}</div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </main>`;
-        document.getElementById("app").innerHTML = `${header()}${liveHtml}${universalSupportBand()}${footer()}`;
-        bindGlobalEvents();
-        bindPageEvents();
-        const liveWindow = document.getElementById("chat-window");
-        if (liveWindow) {
-          liveWindow.innerHTML = history
-            .map(
-              (message) =>
-                `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
-            )
-            .join("");
-          liveWindow.scrollTop = liveWindow.scrollHeight;
-        }
-        if (statusEl) statusEl.textContent = "Chat opened. Saving request...";
         leadForm.dataset.submitting = "0";
-        try {
-          const response = await fetch(apiUrl("/api/live/start"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              sessionId,
-              name: lead.name,
-              phone: lead.phone,
-              email: lead.email,
-              company: String(data.company || providerName).trim() || providerName,
-              issue: lead.issue || issue,
-              message: lead.message || lead.issue,
-              sourcePage: window.location.href
-            })
-          });
-          if (response.ok) {
-            const json = await readApiJson(response);
-            if (json.thread?.id) {
-              state.sessionId = json.thread.id;
-              setCurrentLiveChatSession(json.thread.id);
-              history = (json.thread.messages || []).map((message) => ({
-                role: message.from === "visitor" ? "user" : "bot",
-                text: message.text || ""
-              }));
-              const syncedWindow = document.getElementById("chat-window");
-              if (syncedWindow) {
-                syncedWindow.innerHTML = history
-                  .map(
-                    (message) =>
-                      `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
-                  )
-                  .join("");
-                syncedWindow.scrollTop = syncedWindow.scrollHeight;
-              }
-              persist();
-            }
-          }
-        } catch (error) {
-          console.warn("Could not save live chat lead:", error);
-        }
-        if (statusEl) statusEl.textContent = "Chat started.";
+        render();
       } catch (error) {
         console.error("handleLeadSubmit failed", error);
         if (statusEl) statusEl.textContent = `Chat could not start. ${error?.message ? error.message : "Please try again."}`;
@@ -2525,18 +2524,22 @@ function bindChat() {
 
   async function sendMessage(text) {
     if (!text) return;
-    history.push({ role: "user", text });
-    const leadData = state.leadData || {};
-    const reply = quickReplyResponses[text] ? quickReplyResponse(text, leadData) : freeTextResponse(leadData);
-    history.push({ role: "bot", text: reply });
-    persist();
+    history.push({ id: `pending-${Date.now()}`, role: "user", text });
     draw();
-    if (state.sessionId) {
-      fetch(apiUrl("/api/live/message"), {
+    setSyncStatus("Sending...", false, "send");
+    try {
+      if (!state.sessionId) throw new Error("Chat session is missing. Please start a new chat.");
+      const response = await fetch(apiUrl("/api/live/message"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, message: text })
-      }).catch(() => {});
+      });
+      const json = await readApiJson(response);
+      if (!response.ok) throw new Error(json.error || "Could not send message.");
+      applyServerThread(json.thread);
+      setSyncStatus("");
+    } catch (error) {
+      setSyncStatus(`${error.message || "Message could not be sent."} Please try again.`, true, "send");
     }
   }
 
@@ -2551,6 +2554,7 @@ function bindChat() {
   document.querySelectorAll(".quick-prompt").forEach((button) => {
     button.addEventListener("click", () => sendMessage(button.dataset.prompt));
   });
+  startAiChatPolling();
 }
 
 

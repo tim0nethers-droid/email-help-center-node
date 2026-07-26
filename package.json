@@ -4,7 +4,9 @@
   "description": "Independent email help center built with Node.js, including provider guides, AI-style tools, contact submissions, chat, and admin views.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js",
+    "test": "node --test --test-concurrency=1"
   },
   "keywords": [
     "node",

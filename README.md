@@ -10,6 +10,12 @@ npm start
 
 Open `http://localhost:3000`.
 
+Run the automated checks with:
+
+```bash
+npm test
+```
+
 ## Admin
 
 Open `http://localhost:3000/admin/login`.
@@ -40,10 +46,17 @@ Production environment variables:
 
 ```text
 PORT=3000
+NODE_ENV=production
 ADMIN_ID=your-admin-id
 ADMIN_PASSWORD=your-strong-password
 TICKET_TIMEZONE=Asia/Kolkata
+EHC_DATA_DIR=/absolute/path/to/persistent-data
+TRUST_PROXY=false
 ```
+
+Production startup is rejected while the default admin password is configured.
+Set `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy that
+sets `X-Forwarded-For` and `X-Forwarded-Proto`.
 
 If using a VPS, run the app with a process manager such as PM2 and point Nginx/Apache reverse proxy to `http://127.0.0.1:3000`.
 
