@@ -64,7 +64,7 @@ function securityHeaders() {
 
 function validateConfiguration() {
   if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) {
-    throw new Error("ADMIN_PASSWORD must be changed before starting in production.");
+    console.warn("WARNING: Admin login is disabled until a strong ADMIN_PASSWORD is configured.");
   }
 }
 
@@ -216,6 +216,7 @@ function createSession() {
 }
 
 function isValidAdminLogin(adminId, password) {
+  if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) return false;
   const suppliedId = Buffer.from(String(adminId || ""));
   const expectedId = Buffer.from(ADMIN_ID);
   const suppliedPassword = Buffer.from(String(password || ""));
@@ -1196,4 +1197,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, startServer };
+module.exports = { server, startServer, validateConfiguration, isValidAdminLogin };

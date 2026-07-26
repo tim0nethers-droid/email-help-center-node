@@ -161,8 +161,11 @@ test("server security and concurrent persistence", async (t) => {
     assert.deepEqual(statuses, [401, 401, 401, 401, 401, 429]);
   });
 
-  await t.test("refuses the default password in production", () => {
-    const result = spawnSync(process.execPath, ["server.js"], {
+  await t.test("keeps the public production server available but disables default admin login", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["-e", "const app=require('./server');app.validateConfiguration();console.log(app.isValidAdminLogin('admin','Login@123'))"],
+      {
       cwd: path.resolve(__dirname, ".."),
       env: {
         ...process.env,
@@ -173,8 +176,10 @@ test("server security and concurrent persistence", async (t) => {
       },
       encoding: "utf8",
       timeout: 5000
-    });
-    assert.notEqual(result.status, 0);
-    assert.match(`${result.stdout}${result.stderr}`, /ADMIN_PASSWORD must be changed/);
+      }
+    );
+    assert.equal(result.status, 0);
+    assert.match(`${result.stdout}${result.stderr}`, /Admin login is disabled/);
+    assert.match(result.stdout, /false/);
   });
 });

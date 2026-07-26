@@ -54,7 +54,9 @@ EHC_DATA_DIR=/absolute/path/to/persistent-data
 TRUST_PROXY=false
 ```
 
-Production startup is rejected while the default admin password is configured.
+Production keeps the public site available but disables admin login while the
+default password is configured. Set a strong `ADMIN_PASSWORD` immediately after
+deployment to enable the admin panel.
 Set `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy that
 sets `X-Forwarded-For` and `X-Forwarded-Proto`.
 
