@@ -857,21 +857,23 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/login") {
-    const attempt = loginAttemptState(req);
-    if (attempt.state.count >= LOGIN_MAX_ATTEMPTS) {
-      const retryAfter = Math.max(1, Math.ceil((attempt.state.resetAt - Date.now()) / 1000));
-      send(
-        res,
-        429,
-        { ok: false, error: "Too many login attempts. Try again later." },
-        "application/json; charset=utf-8",
-        { "Retry-After": String(retryAfter) }
-      );
-      return;
-    }
     const body = await readBody(req);
     const adminId = cleanText(body.adminId || body.username || body.id, 120);
-    if (!isValidAdminLogin(adminId, cleanText(body.password, 200))) {
+    const password = cleanText(body.password, 200);
+
+    if (!isValidAdminLogin(adminId, password)) {
+      const attempt = loginAttemptState(req);
+      if (attempt.state.count >= LOGIN_MAX_ATTEMPTS) {
+        const retryAfter = Math.max(1, Math.ceil((attempt.state.resetAt - Date.now()) / 1000));
+        send(
+          res,
+          429,
+          { ok: false, error: "Too many login attempts. Try again later." },
+          "application/json; charset=utf-8",
+          { "Retry-After": String(retryAfter) }
+        );
+        return;
+      }
       recordFailedLogin(req);
       jsonError(res, 401, "Invalid admin ID or password.");
       return;

@@ -161,6 +161,13 @@ test("server security and concurrent persistence", async (t) => {
       statuses.push(response.status);
     }
     assert.deepEqual(statuses, [401, 401, 401, 401, 401, 429]);
+
+    const validLogin = await request(baseUrl, "/api/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ adminId: "test-admin", password: "Test-Password-987!" })
+    });
+    assert.equal(validLogin.status, 200);
   });
 
   await t.test("keeps the public production server available but disables default admin login", () => {
