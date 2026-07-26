@@ -1,9 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
+const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const dataDir = path.join(os.tmpdir(), `email-help-center-test-${process.pid}`);
 process.env.EHC_DATA_DIR = dataDir;
@@ -11,6 +12,7 @@ process.env.PORT = "0";
 process.env.ADMIN_ID = "test-admin";
 process.env.ADMIN_PASSWORD = "Test-Password-987!";
 process.env.NODE_ENV = "test";
+process.env.EHC_DISABLE_AUTO_START = "1";
 
 const { server, startServer } = require("../server");
 
@@ -181,5 +183,48 @@ test("server security and concurrent persistence", async (t) => {
     assert.equal(result.status, 0);
     assert.match(`${result.stdout}${result.stderr}`, /Admin login is disabled/);
     assert.match(result.stdout, /false/);
+  });
+
+  await t.test("auto-starts when imported by a hosting runner", async () => {
+    const probe = net.createServer();
+    await new Promise((resolve, reject) => {
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", resolve);
+    });
+    const port = probe.address().port;
+    await new Promise((resolve) => probe.close(resolve));
+
+    const runnerDataDir = path.join(dataDir, "hosting-runner");
+    const child = spawn(process.execPath, ["-e", "require('./server')"], {
+      cwd: path.resolve(__dirname, ".."),
+      env: {
+        ...process.env,
+        EHC_DISABLE_AUTO_START: "",
+        EHC_DATA_DIR: runnerDataDir,
+        NODE_ENV: "test",
+        PORT: String(port)
+      },
+      stdio: "ignore"
+    });
+
+    try {
+      let response = null;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        try {
+          response = await fetch(`http://127.0.0.1:${port}/`);
+          break;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+      assert.equal(response?.status, 200);
+    } finally {
+      child.kill();
+      await new Promise((resolve) => {
+        if (child.exitCode !== null) resolve();
+        else child.once("exit", resolve);
+      });
+      await fs.rm(runnerDataDir, { recursive: true, force: true });
+    }
   });
 });

@@ -60,6 +60,9 @@ deployment to enable the admin panel.
 Set `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy that
 sets `X-Forwarded-For` and `X-Forwarded-Proto`.
 
+`EHC_DISABLE_AUTO_START=1` is reserved for automated tests that import the
+server module. Do not set it on the deployed web app.
+
 If using a VPS, run the app with a process manager such as PM2 and point Nginx/Apache reverse proxy to `http://127.0.0.1:3000`.
 
 Important: keep the `data/` folder writable and backed up, because support forms, visits, and live chats are saved there.

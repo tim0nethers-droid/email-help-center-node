@@ -1190,7 +1190,7 @@ async function startServer() {
   return server;
 }
 
-if (require.main === module) {
+if (process.env.EHC_DISABLE_AUTO_START !== "1") {
   startServer().catch((error) => {
     console.error("Failed to start server", error);
     process.exit(1);
