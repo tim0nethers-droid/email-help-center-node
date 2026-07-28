@@ -1706,7 +1706,7 @@ function chatPage() {
                   <div class="field"><label>Email Address</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(leadData.email || "")}"></div>
                 </div>
                 <div class="form-row single">
-                  <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(leadData.phone || "+1 ")}"></div>
+                  <div class="field"><label>Phone Number</label><input name="phone" inputmode="tel" required pattern="^(?:\\+?1[\\s.-]?)?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid 10-digit US or Canada phone number. +1 is added automatically." placeholder="555 123 4567" value="${escapeHtml(leadData.phone || "")}"></div>
                 </div>
                 <div class="form-row single">
                   <div class="field">
@@ -2048,6 +2048,18 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function normalizeChatPhone(value) {
+  const raw = String(value || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  const national = digits.length === 10
+    ? digits
+    : digits.length === 11 && digits.startsWith("1")
+      ? digits.slice(1)
+      : "";
+  if (!national) return raw;
+  return `+1 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
 }
 
 function routeContent() {
@@ -2452,7 +2464,7 @@ function bindChat() {
         const lead = {
           name: String(data.name || "").trim(),
           email: String(data.email || "").trim(),
-          phone: String(data.phone || "").trim(),
+          phone: normalizeChatPhone(data.phone),
           issue: String(data.issue || "").trim(),
           message: String(data.issue || "").trim()
         };
@@ -2814,7 +2826,7 @@ function bindLiveChatWidget() {
         <input type="hidden" name="sessionId" value="${escapeHtml(currentLiveChatSession())}">
         <input type="hidden" name="sourcePage" value="${escapeHtml(`${window.location.pathname}${window.location.search}`)}">
         <div class="field"><label>Name</label><input name="name" required placeholder="Your name" value="${escapeHtml(formValues.name)}"></div>
-        <div class="field"><label>Phone</label><input name="phone" required inputmode="tel" pattern="^\\+?1[\\s.-]?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid US or Canada phone number with country code +1" placeholder="+1 555 123 4567" value="${escapeHtml(formValues.phone || "+1 ")}"></div>
+        <div class="field"><label>Phone</label><input name="phone" required inputmode="tel" pattern="^(?:\\+?1[\\s.-]?)?\\(?[2-9][0-9]{2}\\)?[\\s.-]?[2-9][0-9]{2}[\\s.-]?[0-9]{4}$" title="Enter a valid 10-digit US or Canada phone number. +1 is added automatically." placeholder="555 123 4567" value="${escapeHtml(formValues.phone || "")}"></div>
         <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@example.com" value="${escapeHtml(formValues.email)}"></div>
         <div class="field">
           <label>Company</label>
@@ -2851,6 +2863,7 @@ function bindLiveChatWidget() {
       event.preventDefault();
       const form = event.currentTarget;
       const data = Object.fromEntries(new FormData(form).entries());
+      data.phone = normalizeChatPhone(data.phone);
       saveLiveChatVisitor(data);
       try {
         const response = await fetch(apiUrl("/api/live/start"), {

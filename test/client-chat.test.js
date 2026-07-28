@@ -30,7 +30,10 @@ test("AI chat uses the canonical server session and synchronizes messages", () =
   assert.match(bindChatSource, /aiChatPollTimer = setInterval/);
 });
 
-test("chat phone fields default to the USA country code", () => {
-  const defaultCountryCodeMatches = appSource.match(/phone \|\| "\+1 "/g) || [];
-  assert.equal(defaultCountryCodeMatches.length, 2);
+test("chat phone fields add the USA country code automatically", () => {
+  const automaticCountryCodeLabels = appSource.match(/\+1 is added automatically\./g) || [];
+  assert.equal(automaticCountryCodeLabels.length, 2);
+  assert.match(appSource, /phone: normalizeChatPhone\(data\.phone\)/);
+  assert.match(appSource, /data\.phone = normalizeChatPhone\(data\.phone\)/);
+  assert.doesNotMatch(appSource, /phone \|\| "\+1 "/);
 });

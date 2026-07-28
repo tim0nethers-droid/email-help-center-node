@@ -318,10 +318,22 @@ function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
 }
 
+function normalizeNorthAmericanPhone(value) {
+  const raw = cleanText(value, 40);
+  if (!raw || !/^[+\d\s().-]+$/.test(raw)) return raw;
+  const digits = raw.replace(/\D/g, "");
+  const national = digits.length === 10
+    ? digits
+    : digits.length === 11 && digits.startsWith("1")
+      ? digits.slice(1)
+      : "";
+  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(national)) return raw;
+  return `+1 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
+}
+
 function validPhone(value) {
-  const raw = String(value || "").trim();
+  const raw = normalizeNorthAmericanPhone(value);
   if (!raw) return false;
-  if (!/^[+\d\s().-]+$/.test(raw)) return false;
   const digits = raw.replace(/\D/g, "");
   if (digits.length !== 11 || !digits.startsWith("1")) return false;
   const national = digits.slice(1);
@@ -684,7 +696,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const sessionId = cleanText(body.sessionId, 120);
     const name = cleanText(body.name, 120);
-    const phone = cleanText(body.phone, 40);
+    const phone = normalizeNorthAmericanPhone(body.phone);
     const email = cleanText(body.email, 180);
     const sourcePage = cleanText(body.sourcePage || req.headers.referer || "", 240);
     const company = cleanText(body.company, 120) || providerNameFromSource(sourcePage) || "Email Help";

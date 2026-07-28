@@ -99,7 +99,7 @@ test("server security and concurrent persistence", async (t) => {
       body: JSON.stringify({
         sessionId: clientSessionId,
         name: "Chat Tester",
-        phone: "+1 415 555 0198",
+        phone: "415 555 0198",
         email: "chat-tester@example.com",
         company: "Gmail",
         issue: "Test chat sync"
@@ -109,6 +109,7 @@ test("server security and concurrent persistence", async (t) => {
     const startedBody = await started.json();
     assert.ok(startedBody.thread.id);
     assert.notEqual(startedBody.thread.id, clientSessionId);
+    assert.equal(startedBody.thread.visitor.phone, "+1 415 555 0198");
 
     const sent = await request(baseUrl, "/api/live/message", {
       method: "POST",
