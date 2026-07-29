@@ -182,6 +182,7 @@ test("server security and concurrent persistence", async (t) => {
         NODE_ENV: "production",
         ADMIN_ID: "admin",
         ADMIN_PASSWORD: "Login@123",
+        ADMIN_PASSWORD_B64: "",
         PORT: "0"
       },
       encoding: "utf8",
@@ -191,6 +192,30 @@ test("server security and concurrent persistence", async (t) => {
     assert.equal(result.status, 0);
     assert.match(`${result.stdout}${result.stderr}`, /Admin login is disabled/);
     assert.match(result.stdout, /false/);
+  });
+
+  await t.test("supports an encoded admin password containing reserved environment characters", () => {
+    const password = "Login@#123";
+    const result = spawnSync(
+      process.execPath,
+      ["-e", `const app=require('./server');console.log(app.isValidAdminLogin('admin',${JSON.stringify(password)}))`],
+      {
+        cwd: path.resolve(__dirname, ".."),
+        env: {
+          ...process.env,
+          EHC_DISABLE_AUTO_START: "1",
+          NODE_ENV: "production",
+          ADMIN_ID: "admin",
+          ADMIN_PASSWORD: "ignored-fallback",
+          ADMIN_PASSWORD_B64: Buffer.from(password).toString("base64"),
+          PORT: "0"
+        },
+        encoding: "utf8",
+        timeout: 5000
+      }
+    );
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /true/);
   });
 
   await t.test("auto-starts when imported by a hosting runner", async () => {

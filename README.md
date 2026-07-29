@@ -49,6 +49,8 @@ PORT=3000
 NODE_ENV=production
 ADMIN_ID=your-admin-id
 ADMIN_PASSWORD=your-strong-password
+# Optional base64 form; when set, this takes precedence over ADMIN_PASSWORD.
+ADMIN_PASSWORD_B64=
 TICKET_TIMEZONE=Asia/Kolkata
 EHC_DATA_DIR=/absolute/path/to/persistent-data
 TRUST_PROXY=false
@@ -57,6 +59,8 @@ TRUST_PROXY=false
 Production keeps the public site available but disables admin login while the
 default password is configured. Set a strong `ADMIN_PASSWORD` immediately after
 deployment to enable the admin panel.
+For passwords containing `#` or other reserved environment characters, set
+`ADMIN_PASSWORD_B64` to the password's base64 value.
 Set `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy that
 sets `X-Forwarded-For` and `X-Forwarded-Proto`.
 

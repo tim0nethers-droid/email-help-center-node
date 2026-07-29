@@ -8,7 +8,11 @@ const { URL } = require("url");
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
 const DEFAULT_ADMIN_PASSWORD = "Login@123";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
+const encodedAdminPassword = String(process.env.ADMIN_PASSWORD_B64 || "").trim();
+const decodedAdminPassword = encodedAdminPassword
+  ? Buffer.from(encodedAdminPassword, "base64").toString("utf8")
+  : "";
+const ADMIN_PASSWORD = decodedAdminPassword || process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const LOGIN_WINDOW_MS = 1000 * 60 * 15;
 const LOGIN_MAX_ATTEMPTS = 5;
