@@ -2211,15 +2211,8 @@ function bindContactForm() {
       company: data.company || data.category,
       issue: data.message || data.issue || data.subject
     });
-    try {
-      const response = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-      const json = await readApiJson(response);
-      if (!response.ok) throw new Error(json.error || "Submit failed");
-      form.reset();
+    const showSuccess = (json) => {
+      if (!document.body.contains(status)) return;
       status.innerHTML = `
         <div class="notice success">
           <strong>Submitted successfully.</strong><br>
@@ -2228,6 +2221,16 @@ function bindContactForm() {
           Sent to: <strong>${escapeHtml(json.destination || "Admin Panel > Support Forms")}</strong><br>
           Admin can view it here: <a href="${escapeHtml(json.adminPath || "/admin/support")}" data-link>Open Support Forms</a>
         </div>`;
+    };
+    try {
+      const result = await resilientApiPost("/api/contact", data, "contact-form");
+      form.reset();
+      if (result.queued) {
+        status.innerHTML = `<div class="notice info"><strong>Saved safely.</strong> Network/server unavailable. This form will submit automatically when the connection returns.</div>`;
+        onPendingRequestDelivered(result.requestId, showSuccess);
+        return;
+      }
+      showSuccess(result.json);
     } catch (error) {
       status.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
     }
@@ -2279,15 +2282,8 @@ function bindProviderTools() {
         company: data.company || form.dataset.providerName || data.category,
         issue: data.message || data.issue || data.subject
       });
-      try {
-        const response = await fetch("/api/contact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
-        });
-        const json = await readApiJson(response);
-        if (!response.ok) throw new Error(json.error || "Submit failed");
-        form.reset();
+      const showSuccess = (json) => {
+        if (!document.body.contains(status)) return;
         status.innerHTML = `
           <div class="notice success">
             <strong>Ticket submitted.</strong><br>
@@ -2295,6 +2291,16 @@ function bindProviderTools() {
             Sent to: <strong>${escapeHtml(json.destination || "Admin Panel > Support Forms")}</strong><br>
             Admin can view it here: <a href="${escapeHtml(json.adminPath || "/admin/support")}" data-link>Open Support Forms</a>
           </div>`;
+      };
+      try {
+        const result = await resilientApiPost("/api/contact", data, "provider-ticket-form");
+        form.reset();
+        if (result.queued) {
+          status.innerHTML = `<div class="notice info"><strong>Saved safely.</strong> Network/server unavailable. This ticket will submit automatically when the connection returns.</div>`;
+          onPendingRequestDelivered(result.requestId, showSuccess);
+          return;
+        }
+        showSuccess(result.json);
       } catch (error) {
         status.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
       }
@@ -2473,34 +2479,37 @@ function bindChat() {
           company: String(data.company || chatProvider.name || "").trim() || chatProvider.name,
           issue: lead.issue
         });
-        const response = await fetch(apiUrl("/api/live/start"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: lead.name,
-            phone: lead.phone,
-            email: lead.email,
-            company: String(data.company || providerName).trim() || providerName,
-            issue: lead.issue || issue,
-            message: lead.message || lead.issue,
-            sourcePage: window.location.href
-          })
-        });
-        const json = await readApiJson(response);
-        if (!response.ok) throw new Error(json.error || "Could not start chat.");
-        if (!json.thread?.id) throw new Error("Chat server did not return a session.");
-
-        history = threadHistory(json.thread);
-        state = {
-          started: true,
-          leadData: lead,
-          sessionId: json.thread.id,
-          messages: history
+        const startPayload = {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          company: String(data.company || providerName).trim() || providerName,
+          issue: lead.issue || issue,
+          message: lead.message || lead.issue,
+          sourcePage: window.location.href
         };
-        setCurrentLiveChatSession(json.thread.id);
-        persist();
-        leadForm.dataset.submitting = "0";
-        render();
+        const finishStart = (json) => {
+          if (!json.thread?.id) throw new Error("Chat server did not return a session.");
+          history = threadHistory(json.thread);
+          state = {
+            started: true,
+            leadData: lead,
+            sessionId: json.thread.id,
+            messages: history
+          };
+          setCurrentLiveChatSession(json.thread.id);
+          persist();
+          leadForm.dataset.submitting = "0";
+          render();
+        };
+        const result = await resilientApiPost("/api/live/start", startPayload, `ai-chat-start:${providerDomain}`);
+        if (result.queued) {
+          if (statusEl) statusEl.textContent = "Saved safely. Chat will start automatically when the network/server returns.";
+          leadForm.dataset.submitting = "0";
+          onPendingRequestDelivered(result.requestId, finishStart);
+          return;
+        }
+        finishStart(result.json);
       } catch (error) {
         console.error("handleLeadSubmit failed", error);
         if (statusEl) statusEl.textContent = `Chat could not start. ${error?.message ? error.message : "Please try again."}`;
@@ -2539,14 +2548,20 @@ function bindChat() {
     setSyncStatus("Sending...", false, "send");
     try {
       if (!state.sessionId) throw new Error("Chat session is missing. Please start a new chat.");
-      const response = await fetch(apiUrl("/api/live/message"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: state.sessionId, message: text })
-      });
-      const json = await readApiJson(response);
-      if (!response.ok) throw new Error(json.error || "Could not send message.");
-      applyServerThread(json.thread);
+      const result = await resilientApiPost(
+        "/api/live/message",
+        { sessionId: state.sessionId, message: text },
+        `ai-chat-message:${state.sessionId}`
+      );
+      if (result.queued) {
+        setSyncStatus("Saved offline. Message will send automatically when the connection returns.", false, "send");
+        onPendingRequestDelivered(result.requestId, (json) => {
+          applyServerThread(json.thread);
+          setSyncStatus("");
+        });
+        return;
+      }
+      applyServerThread(result.json.thread);
       setSyncStatus("");
     } catch (error) {
       setSyncStatus(`${error.message || "Message could not be sent."} Please try again.`, true, "send");
@@ -2724,6 +2739,164 @@ function apiUrl(pathname) {
   return `${apiBaseUrl()}${pathname}`;
 }
 
+const pendingRequestStorageKey = "ehc_pending_requests_v1";
+let pendingRequestFlushTimer = null;
+let pendingRequestFlushInFlight = false;
+
+function pendingRequestId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function readPendingRequests() {
+  const rows = readLocalJson(pendingRequestStorageKey, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function writePendingRequests(rows) {
+  localStorage.setItem(pendingRequestStorageKey, JSON.stringify(rows));
+}
+
+function removePendingRequest(id) {
+  writePendingRequests(readPendingRequests().filter((item) => item.id !== id));
+}
+
+function updatePendingRequest(item) {
+  const rows = readPendingRequests();
+  const index = rows.findIndex((entry) => entry.id === item.id);
+  if (index === -1) rows.push(item);
+  else rows[index] = item;
+  writePendingRequests(rows);
+}
+
+function applyDeliveredPendingRequest(item, json) {
+  if (!json?.thread?.id) return;
+  if (item.kind === "live-chat-start") {
+    setCurrentLiveChatSession(json.thread.id);
+    return;
+  }
+  if (item.kind.startsWith("ai-chat-start:")) {
+    const providerDomain = item.kind.slice("ai-chat-start:".length) || "gmail.com";
+    const leadData = {
+      name: item.payload.name || "",
+      email: item.payload.email || "",
+      phone: item.payload.phone || "",
+      issue: item.payload.issue || item.payload.message || "",
+      message: item.payload.message || item.payload.issue || ""
+    };
+    const messages = (json.thread.messages || []).map((message) => ({
+      id: message.id || "",
+      role: message.from === "visitor" ? "user" : "bot",
+      text: message.text || "",
+      createdAt: message.createdAt || ""
+    }));
+    writeChatState(providerDomain, {
+      started: true,
+      leadData,
+      sessionId: json.thread.id,
+      messages
+    });
+    setCurrentLiveChatSession(json.thread.id);
+  }
+}
+
+async function transmitPendingRequest(item, { notify = false } = {}) {
+  let response;
+  let json;
+  try {
+    response = await fetch(apiUrl(item.path), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...item.payload, clientRequestId: item.id })
+    });
+    json = await readApiJson(response);
+  } catch (error) {
+    error.retryable = true;
+    throw error;
+  }
+
+  if (!response.ok) {
+    const error = new Error(json.error || "Request failed.");
+    error.retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+    error.retryAfter = Number(response.headers.get("retry-after") || 0);
+    throw error;
+  }
+
+  removePendingRequest(item.id);
+  if (notify) {
+    applyDeliveredPendingRequest(item, json);
+    window.dispatchEvent(new CustomEvent("ehc:pending-request-delivered", { detail: { item, json } }));
+  }
+  return json;
+}
+
+async function resilientApiPost(path, payload, kind) {
+  const item = {
+    id: pendingRequestId(),
+    path,
+    payload,
+    kind,
+    attempts: 0,
+    createdAt: new Date().toISOString(),
+    nextAttemptAt: 0
+  };
+  updatePendingRequest(item);
+  try {
+    const json = await transmitPendingRequest(item);
+    return { queued: false, requestId: item.id, json };
+  } catch (error) {
+    if (error.retryable === false) {
+      removePendingRequest(item.id);
+      throw error;
+    }
+    item.attempts += 1;
+    item.nextAttemptAt = Date.now() + Math.max(error.retryAfter * 1000 || 0, 3000);
+    updatePendingRequest(item);
+    return { queued: true, requestId: item.id, error };
+  }
+}
+
+function onPendingRequestDelivered(requestId, callback) {
+  const handler = (event) => {
+    if (event.detail?.item?.id !== requestId) return;
+    window.removeEventListener("ehc:pending-request-delivered", handler);
+    callback(event.detail.json, event.detail.item);
+  };
+  window.addEventListener("ehc:pending-request-delivered", handler);
+}
+
+async function flushPendingRequests() {
+  if (pendingRequestFlushInFlight || !navigator.onLine) return;
+  pendingRequestFlushInFlight = true;
+  try {
+    const rows = readPendingRequests();
+    for (const item of rows) {
+      if (Number(item.nextAttemptAt || 0) > Date.now()) continue;
+      try {
+        await transmitPendingRequest(item, { notify: true });
+      } catch (error) {
+        if (error.retryable === false) {
+          removePendingRequest(item.id);
+          window.dispatchEvent(new CustomEvent("ehc:pending-request-failed", { detail: { item, error } }));
+          continue;
+        }
+        item.attempts = Number(item.attempts || 0) + 1;
+        const backoff = Math.min(60_000, 3000 * 2 ** Math.min(item.attempts - 1, 4));
+        item.nextAttemptAt = Date.now() + Math.max(error.retryAfter * 1000 || 0, backoff);
+        updatePendingRequest(item);
+      }
+    }
+  } finally {
+    pendingRequestFlushInFlight = false;
+  }
+}
+
+function startPendingRequestRetry() {
+  window.addEventListener("online", flushPendingRequests);
+  if (pendingRequestFlushTimer) clearInterval(pendingRequestFlushTimer);
+  pendingRequestFlushTimer = setInterval(flushPendingRequests, 4000);
+  setTimeout(flushPendingRequests, 300);
+}
+
 function bindLiveChatWidget() {
   const widget = document.getElementById("live-chat-widget");
   if (!widget) return;
@@ -2757,7 +2930,16 @@ function bindLiveChatWidget() {
       startLiveChatPolling();
       return json.thread;
     } catch (error) {
-      drawStartForm(error.message);
+      if (sessionId) {
+        if (!content.querySelector(".live-chat-connection-notice")) {
+          content.insertAdjacentHTML(
+            "beforeend",
+            `<div class="notice info live-chat-connection-notice">Connection unavailable. Your active chat is preserved and will reconnect automatically.</div>`
+          );
+        }
+      } else {
+        drawStartForm(error.message);
+      }
       return null;
     }
   }
@@ -2864,20 +3046,22 @@ function bindLiveChatWidget() {
       data.phone = normalizeChatPhone(data.phone);
       saveLiveChatVisitor(data);
       try {
-        const response = await fetch(apiUrl("/api/live/start"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
-        });
-        const json = await readApiJson(response);
-        if (!response.ok) throw new Error(json.error || "Could not start live chat.");
-        setCurrentLiveChatSession(json.thread.id);
-        localStorage.setItem("ehc_live_chat_open", "true");
-        toggle.classList.add("active");
-        const label = toggle.querySelector("span:last-child");
-        if (label) label.textContent = "Chat Active";
-        startLiveChatPolling();
-        drawLiveThread(json.thread);
+        const finishStart = (json) => {
+          setCurrentLiveChatSession(json.thread.id);
+          localStorage.setItem("ehc_live_chat_open", "true");
+          toggle.classList.add("active");
+          const label = toggle.querySelector("span:last-child");
+          if (label) label.textContent = "Chat Active";
+          startLiveChatPolling();
+          drawLiveThread(json.thread);
+        };
+        const result = await resilientApiPost("/api/live/start", data, "live-chat-start");
+        if (result.queued) {
+          drawStartForm("Saved safely. Chat will start automatically when the network/server returns.");
+          onPendingRequestDelivered(result.requestId, finishStart);
+          return;
+        }
+        finishStart(result.json);
       } catch (error) {
         drawStartForm(error.message);
       }
@@ -2983,14 +3167,23 @@ function bindLiveChatWidget() {
       if (visitorTypingTimer) clearTimeout(visitorTypingTimer);
       await sendVisitorTyping(false);
       try {
-        const response = await fetch(apiUrl("/api/live/message"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: currentLiveChatSession(), message })
-        });
-        const json = await readApiJson(response);
-        if (!response.ok) throw new Error(json.error || "Could not send message.");
-        drawLiveThread(json.thread, { forceBottom: true, typing: json.typing });
+        const sessionId = currentLiveChatSession();
+        const result = await resilientApiPost(
+          "/api/live/message",
+          { sessionId, message },
+          `live-chat-message:${sessionId}`
+        );
+        if (result.queued) {
+          content.insertAdjacentHTML(
+            "beforeend",
+            `<div class="notice info">Saved offline. Message will send automatically when the connection returns.</div>`
+          );
+          onPendingRequestDelivered(result.requestId, (json) => {
+            drawLiveThread(json.thread, { forceBottom: true, typing: json.typing });
+          });
+          return;
+        }
+        drawLiveThread(result.json.thread, { forceBottom: true, typing: result.json.typing });
       } catch (error) {
         content.insertAdjacentHTML("beforeend", `<div class="notice">${escapeHtml(error.message)}</div>`);
       }
@@ -3021,7 +3214,11 @@ function bindLiveChatWidget() {
       const draft = activeInput?.value || "";
       const response = await fetch(apiUrl(`/api/live/thread?sessionId=${encodeURIComponent(sessionId)}`));
       const json = await readApiJson(response);
-      if (!response.ok) throw new Error(json.error || "Could not load live chat.");
+      if (!response.ok) {
+        const error = new Error(json.error || "Could not load live chat.");
+        error.sessionMissing = response.status === 404;
+        throw error;
+      }
       if (json.thread?.visitor?.profileComplete === false && !(json.thread?.messages || []).length) {
         drawStartForm();
         return;
@@ -3033,8 +3230,17 @@ function bindLiveChatWidget() {
         keepFocus: Boolean(activeInput)
       });
     } catch (error) {
-      setCurrentLiveChatSession("");
-      drawStartForm(error.message);
+      if (error.sessionMissing) {
+        setCurrentLiveChatSession("");
+        drawStartForm(error.message);
+        return;
+      }
+      if (!content.querySelector(".live-chat-connection-notice")) {
+        content.insertAdjacentHTML(
+          "beforeend",
+          `<div class="notice info live-chat-connection-notice">Connection unavailable. Your active chat is preserved and will reconnect automatically.</div>`
+        );
+      }
     }
   }
 
@@ -4312,6 +4518,31 @@ async function loadAdminLiveThread(threadId, options = {}) {
   }
 }
 
+function bindAdminPasswordSettings() {
+  const form = document.getElementById("admin-password-form");
+  const status = document.getElementById("admin-password-status");
+  if (!form || !status) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    if (data.newPassword !== data.confirmPassword) {
+      status.innerHTML = `<div class="notice">New passwords do not match.</div>`;
+      return;
+    }
+    status.innerHTML = `<div class="notice info">Updating password...</div>`;
+    try {
+      const result = await adminPost("/api/admin/password", {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword
+      });
+      form.reset();
+      status.innerHTML = `<div class="notice success">${escapeHtml(result.message || "Admin password updated.")}</div>`;
+    } catch (error) {
+      status.innerHTML = `<div class="notice">${escapeHtml(error.message || "Password could not be updated.")}</div>`;
+    }
+  });
+}
+
 async function loadAdmin(kind, content) {
   try {
     if (kind !== "live" && adminLivePollTimer) {
@@ -4403,9 +4634,19 @@ async function loadAdmin(kind, content) {
       content.innerHTML =
         statHtml +
         `<div class="grid two">
-          <div class="card"><div class="card-body"><h3>Server Settings</h3><p>Set <code>PORT</code>, <code>ADMIN_ID</code>, and <code>ADMIN_PASSWORD</code> as environment variables before starting the Node server. Do not use the old default password in production.</p></div></div>
+          <div class="card"><div class="card-body">
+            <h3>Change Admin Password</h3>
+            <form class="form" id="admin-password-form">
+              <div class="field"><label>Current password</label><input name="currentPassword" type="password" required autocomplete="current-password"></div>
+              <div class="field"><label>New password</label><input name="newPassword" type="password" minlength="10" required autocomplete="new-password"></div>
+              <div class="field"><label>Confirm new password</label><input name="confirmPassword" type="password" minlength="10" required autocomplete="new-password"></div>
+              <button class="button" type="submit">Update Password</button>
+              <div id="admin-password-status" aria-live="polite"></div>
+            </form>
+          </div></div>
           <div class="card"><div class="card-body"><h3>Auto Reply Message</h3><p>Thank you. I will call you back shortly.</p><p class="helper">This default message is sent once when a visitor starts a live chat.</p></div></div>
         </div>`;
+      bindAdminPasswordSettings();
       return;
     }
 
@@ -4452,3 +4693,4 @@ function formatDate(value) {
 }
 
 render();
+startPendingRequestRetry();

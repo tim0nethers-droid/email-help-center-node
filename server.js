@@ -20,7 +20,7 @@ const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
-const SERVER_REVISION = "v79";
+const SERVER_REVISION = "v81";
 const SERVER_INSTANCE_ID = crypto.randomBytes(8).toString("hex");
 
 const rootDir = __dirname;
@@ -40,6 +40,7 @@ const files = {
   visits: path.join(dataDir, "visits.json"),
   liveChats: path.join(dataDir, "live-chats.json")
 };
+const adminAuthFile = path.join(dataDir, "admin-auth.json");
 
 const loginAttempts = new Map();
 const mutationQueues = new Map();
@@ -70,7 +71,7 @@ function securityHeaders() {
 }
 
 function validateConfiguration() {
-  if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) {
+  if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD && !readStoredAdminAuth()) {
     console.warn("WARNING: Admin login is disabled until a strong ADMIN_PASSWORD is configured.");
   }
 }
@@ -266,20 +267,41 @@ function createSession() {
     JSON.stringify({ expiresAt: Date.now() + SESSION_TTL_MS, nonce: crypto.randomBytes(16).toString("hex") }),
     "utf8"
   ).toString("base64url");
-  const signature = crypto.createHmac("sha256", `${ADMIN_ID}\0${ADMIN_PASSWORD}`).update(payload).digest("base64url");
+  const signature = crypto.createHmac("sha256", adminSessionSigningSecret()).update(payload).digest("base64url");
   return `${payload}.${signature}`;
 }
 
+function readStoredAdminAuth() {
+  try {
+    const stored = JSON.parse(fs.readFileSync(adminAuthFile, "utf8"));
+    if (stored?.version !== 1 || !stored.salt || !stored.passwordHash) return null;
+    return stored;
+  } catch {
+    return null;
+  }
+}
+
+function adminSessionSigningSecret() {
+  const stored = readStoredAdminAuth();
+  return stored ? `${ADMIN_ID}\0${stored.passwordHash}` : `${ADMIN_ID}\0${ADMIN_PASSWORD}`;
+}
+
 function isValidAdminLogin(adminId, password) {
-  if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) return false;
   const suppliedId = Buffer.from(String(adminId || ""));
   const expectedId = Buffer.from(ADMIN_ID);
+  if (suppliedId.length !== expectedId.length || !crypto.timingSafeEqual(suppliedId, expectedId)) return false;
+
+  const stored = readStoredAdminAuth();
+  if (stored) {
+    const suppliedHash = crypto.scryptSync(String(password || ""), stored.salt, 64);
+    const expectedHash = Buffer.from(stored.passwordHash, "hex");
+    return suppliedHash.length === expectedHash.length && crypto.timingSafeEqual(suppliedHash, expectedHash);
+  }
+
+  if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) return false;
   const suppliedPassword = Buffer.from(String(password || ""));
   const expectedPassword = Buffer.from(ADMIN_PASSWORD);
-  return suppliedId.length === expectedId.length &&
-    suppliedPassword.length === expectedPassword.length &&
-    crypto.timingSafeEqual(suppliedId, expectedId) &&
-    crypto.timingSafeEqual(suppliedPassword, expectedPassword);
+  return suppliedPassword.length === expectedPassword.length && crypto.timingSafeEqual(suppliedPassword, expectedPassword);
 }
 
 function sessionCookie(req, token, maxAgeSeconds) {
@@ -324,7 +346,7 @@ function isAuthed(req) {
   if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
 
   const expected = Buffer.from(
-    crypto.createHmac("sha256", `${ADMIN_ID}\0${ADMIN_PASSWORD}`).update(parts[0]).digest("base64url")
+    crypto.createHmac("sha256", adminSessionSigningSecret()).update(parts[0]).digest("base64url")
   );
   const supplied = Buffer.from(parts[1]);
   if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) return false;
@@ -687,6 +709,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/contact") {
     const body = await readBody(req);
+    const clientRequestId = cleanText(body.clientRequestId, 120);
     const name = cleanText(body.name, 120);
     const phone = cleanText(body.phone, 40);
     const email = cleanText(body.email, 180);
@@ -720,11 +743,19 @@ async function handleApi(req, res, url) {
       ip: getClientIp(req),
       userAgent: req.headers["user-agent"] || ""
     };
-    await appendJson(files.submissions, record);
+    record.clientRequestId = clientRequestId;
+    const savedRecord = await withMutationLock(files.submissions, async () => {
+      const rows = await readJson(files.submissions);
+      const existing = clientRequestId ? rows.find((row) => row.clientRequestId === clientRequestId) : null;
+      if (existing) return existing;
+      rows.unshift(record);
+      await writeJson(files.submissions, rows.slice(0, 1000));
+      return record;
+    });
     send(res, 201, {
       ok: true,
-      id: record.id,
-      ticketId: record.ticketId,
+      id: savedRecord.id,
+      ticketId: savedRecord.ticketId,
       message: "Thanks. Your request was submitted.",
       destination: "Admin Panel > Support Forms",
       adminPath: "/admin/support"
@@ -757,6 +788,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/live/start") {
     const body = await readBody(req);
+    const clientRequestId = cleanText(body.clientRequestId, 120);
     const sessionId = cleanText(body.sessionId, 120);
     const name = cleanText(body.name, 120);
     const phone = normalizeNorthAmericanPhone(body.phone);
@@ -803,12 +835,15 @@ async function handleApi(req, res, url) {
 
     const thread = await withMutationLock(files.liveChats, async () => {
       const rows = await readLiveChats();
+      const requestMatch = clientRequestId ? rows.find((row) => row.clientRequestId === clientRequestId) : null;
+      if (requestMatch) return requestMatch;
       const existingIndex = rows.findIndex((row) => row.id === sessionId);
       let nextThread;
       if (existingIndex !== -1) {
         nextThread = rows[existingIndex];
         const hadVisitorMessages = (nextThread.messages || []).some((message) => message.from === "visitor");
         nextThread.visitor = { name, phone, email, company, issue, sourcePage, profileComplete: true };
+        if (clientRequestId) nextThread.clientRequestId = clientRequestId;
         nextThread.status = "open";
         nextThread.updatedAt = new Date().toISOString();
         nextThread.messages = Array.isArray(nextThread.messages) ? nextThread.messages : [];
@@ -822,6 +857,7 @@ async function handleApi(req, res, url) {
         rows.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
       } else {
         nextThread = createLiveThread(req, { name, phone, email, company, issue, sourcePage, profileComplete: true }, initialMessages);
+        if (clientRequestId) nextThread.clientRequestId = clientRequestId;
         rows.unshift(nextThread);
       }
       await writeLiveChats(rows);
@@ -885,6 +921,7 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/live/message") {
     const body = await readBody(req);
     const sessionId = cleanText(body.sessionId, 120);
+    const clientRequestId = cleanText(body.clientRequestId, 120);
     const message = redactSecrets(body.message);
 
     if (!sessionId || !message) {
@@ -894,7 +931,10 @@ async function handleApi(req, res, url) {
 
     const updated = await updateLiveChat(sessionId, (thread) => {
       thread.messages = thread.messages || [];
-      thread.messages.push(makeLiveMessage("visitor", message, thread.visitor?.name || "Visitor"));
+      if (clientRequestId && thread.messages.some((item) => item.clientRequestId === clientRequestId)) return thread;
+      thread.messages.push(
+        makeLiveMessage("visitor", message, thread.visitor?.name || "Visitor", clientRequestId ? { clientRequestId } : {})
+      );
       addAutoReplyIfMissing(thread);
       const previousBotSteps = thread.messages.filter((item) => item.from === "agent" && item.name === "Email Bot").length;
       thread.messages.push(makeLiveMessage("agent", liveBotReply(thread.visitor?.issue || message, thread.visitor?.company, previousBotSteps), "Email Bot"));
@@ -988,6 +1028,36 @@ async function handleApi(req, res, url) {
         instanceId: SERVER_INSTANCE_ID,
         dataStoreId: crypto.createHash("sha256").update(dataDir).digest("hex").slice(0, 16),
         liveChatCount: liveChats.length
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/admin/password") {
+      const body = await readBody(req);
+      const currentPassword = String(body.currentPassword || "");
+      const newPassword = String(body.newPassword || "");
+      if (!isValidAdminLogin(ADMIN_ID, currentPassword)) {
+        jsonError(res, 401, "Current admin password is incorrect.");
+        return;
+      }
+      if (newPassword.length < 10 || newPassword.length > 200) {
+        jsonError(res, 400, "New password must be between 10 and 200 characters.");
+        return;
+      }
+
+      const salt = crypto.randomBytes(16).toString("hex");
+      const passwordHash = crypto.scryptSync(newPassword, salt, 64).toString("hex");
+      await withMutationLock(adminAuthFile, async () => {
+        await writeJson(adminAuthFile, {
+          version: 1,
+          salt,
+          passwordHash,
+          updatedAt: new Date().toISOString()
+        });
+      });
+      const token = createSession();
+      send(res, 200, { ok: true, message: "Admin password updated." }, "application/json; charset=utf-8", {
+        "Set-Cookie": sessionCookie(req, token, Math.floor(SESSION_TTL_MS / 1000))
       });
       return;
     }

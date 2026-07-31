@@ -117,7 +117,7 @@ test("server security and concurrent persistence", async (t) => {
     });
     assert.equal(diagnostics.status, 200);
     const diagnosticBody = await diagnostics.json();
-    assert.equal(diagnosticBody.revision, "v79");
+    assert.equal(diagnosticBody.revision, "v81");
     assert.match(diagnosticBody.instanceId, /^[a-f0-9]{16}$/);
     assert.match(diagnosticBody.dataStoreId, /^[a-f0-9]{16}$/);
 
@@ -183,6 +183,80 @@ test("server security and concurrent persistence", async (t) => {
       })
     });
     assert.equal(sent.status, 201);
+  });
+
+  await t.test("deduplicates retried forms and live-chat messages", async () => {
+    const contactPayload = {
+      clientRequestId: "contact-retry-1",
+      name: "Retry Contact",
+      email: "retry-contact@example.com",
+      subject: "Retry-safe form",
+      message: "Submit this form once"
+    };
+    const contactResponses = await Promise.all([
+      request(baseUrl, "/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(contactPayload)
+      }),
+      request(baseUrl, "/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(contactPayload)
+      })
+    ]);
+    const contactBodies = await Promise.all(contactResponses.map((response) => response.json()));
+    assert.equal(contactBodies[0].id, contactBodies[1].id);
+
+    const startPayload = {
+      clientRequestId: "live-start-retry-1",
+      name: "Retry Chat",
+      phone: "4155550187",
+      email: "retry-chat@example.com",
+      company: "Gmail",
+      issue: "Retry-safe chat start"
+    };
+    const startResponses = await Promise.all([
+      request(baseUrl, "/api/live/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(startPayload)
+      }),
+      request(baseUrl, "/api/live/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(startPayload)
+      })
+    ]);
+    const startBodies = await Promise.all(startResponses.map((response) => response.json()));
+    assert.equal(startBodies[0].thread.id, startBodies[1].thread.id);
+
+    const messagePayload = {
+      clientRequestId: "live-message-retry-1",
+      sessionId: startBodies[0].thread.id,
+      message: "Store this visitor message once"
+    };
+    await Promise.all([
+      request(baseUrl, "/api/live/message", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(messagePayload)
+      }),
+      request(baseUrl, "/api/live/message", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(messagePayload)
+      })
+    ]);
+    const threadResponse = await request(
+      baseUrl,
+      `/api/live/thread?sessionId=${encodeURIComponent(startBodies[0].thread.id)}`
+    );
+    const threadBody = await threadResponse.json();
+    assert.equal(
+      threadBody.thread.messages.filter((message) => message.text === messagePayload.message).length,
+      1
+    );
   });
 
   await t.test("preserves concurrent messages in one live-chat thread", async () => {
@@ -321,7 +395,7 @@ test("server security and concurrent persistence", async (t) => {
   });
 
   await t.test("supports an encoded admin password containing reserved environment characters", () => {
-    const password = "Login@#123";
+    const password = "Test-Encoded-Password!42";
     const result = spawnSync(
       process.execPath,
       ["-e", `const app=require('./server');console.log(app.isValidAdminLogin('admin',${JSON.stringify(password)}))`],
@@ -385,5 +459,40 @@ test("server security and concurrent persistence", async (t) => {
       });
       await fs.rm(runnerDataDir, { recursive: true, force: true });
     }
+  });
+
+  await t.test("rotates the admin password without storing plaintext", async () => {
+    const newPassword = "Rotated-Password-5292!";
+    const changed = await request(baseUrl, "/api/admin/password", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({ currentPassword: "Test-Password-987!", newPassword })
+    });
+    assert.equal(changed.status, 200);
+    const rotatedCookie = changed.headers.get("set-cookie");
+
+    const oldLogin = await request(baseUrl, "/api/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ adminId: "test-admin", password: "Test-Password-987!" })
+    });
+    assert.equal(oldLogin.status, 401);
+
+    const newLogin = await request(baseUrl, "/api/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ adminId: "test-admin", password: newPassword })
+    });
+    assert.equal(newLogin.status, 200);
+
+    const storedAuth = JSON.parse(await fs.readFile(path.join(dataDir, "admin-auth.json"), "utf8"));
+    assert.equal(storedAuth.version, 1);
+    assert.ok(storedAuth.passwordHash);
+    assert.equal(JSON.stringify(storedAuth).includes(newPassword), false);
+
+    const stillAuthed = await request(baseUrl, "/api/admin/diagnostics", {
+      headers: { cookie: rotatedCookie }
+    });
+    assert.equal(stillAuthed.status, 200);
   });
 });
