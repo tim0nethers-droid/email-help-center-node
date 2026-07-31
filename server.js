@@ -44,6 +44,8 @@ const loginAttempts = new Map();
 const mutationQueues = new Map();
 const liveTypingStates = new Map();
 const TYPING_TTL_MS = 2500;
+const MUTATION_FILE_LOCK_TIMEOUT_MS = 30_000;
+const MUTATION_FILE_LOCK_STALE_MS = 120_000;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -124,9 +126,58 @@ async function writeJson(file, value) {
   throw lastError;
 }
 
+async function acquireMutationFileLock(key) {
+  const lockFile = `${key}.lock`;
+  const deadline = Date.now() + MUTATION_FILE_LOCK_TIMEOUT_MS;
+  await fsp.mkdir(path.dirname(key), { recursive: true });
+
+  while (true) {
+    try {
+      const handle = await fsp.open(lockFile, "wx");
+      try {
+        await handle.writeFile(`${process.pid} ${new Date().toISOString()}\n`, "utf8");
+      } finally {
+        await handle.close();
+      }
+      return async () => {
+        await fsp.unlink(lockFile).catch((error) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+
+      try {
+        const stat = await fsp.stat(lockFile);
+        if (Date.now() - stat.mtimeMs > MUTATION_FILE_LOCK_STALE_MS) {
+          await fsp.unlink(lockFile).catch((unlinkError) => {
+            if (unlinkError.code !== "ENOENT") throw unlinkError;
+          });
+          continue;
+        }
+      } catch (statError) {
+        if (statError.code === "ENOENT") continue;
+        throw statError;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out waiting for data lock: ${path.basename(key)}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25 + Math.floor(Math.random() * 50)));
+    }
+  }
+}
+
 async function withMutationLock(key, operation) {
   const previous = mutationQueues.get(key) || Promise.resolve();
-  const current = previous.catch(() => {}).then(operation);
+  const current = previous.catch(() => {}).then(async () => {
+    const release = await acquireMutationFileLock(key);
+    try {
+      return await operation();
+    } finally {
+      await release();
+    }
+  });
   mutationQueues.set(key, current);
   try {
     return await current;

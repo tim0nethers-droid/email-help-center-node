@@ -20,6 +20,53 @@ async function request(baseUrl, pathname, options = {}) {
   return fetch(`${baseUrl}${pathname}`, options);
 }
 
+async function startSharedDataServer(sharedDataDir) {
+  const script = [
+    "const { server, startServer } = require('./server');",
+    "startServer().then(() => console.log('READY:' + server.address().port)).catch((error) => { console.error(error); process.exit(1); });"
+  ].join("");
+  const child = spawn(process.execPath, ["-e", script], {
+    cwd: path.resolve(__dirname, ".."),
+    env: {
+      ...process.env,
+      EHC_DATA_DIR: sharedDataDir,
+      EHC_DISABLE_AUTO_START: "1",
+      NODE_ENV: "test",
+      PORT: "0"
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  return new Promise((resolve, reject) => {
+    let output = "";
+    let errors = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Shared-data test server did not start. ${errors}`));
+    }, 10_000);
+
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+      const match = output.match(/READY:(\d+)/);
+      if (!match) return;
+      clearTimeout(timeout);
+      resolve({ child, baseUrl: `http://127.0.0.1:${match[1]}` });
+    });
+    child.stderr.on("data", (chunk) => {
+      errors += chunk.toString();
+    });
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("exit", (code) => {
+      if (code === 0 || /READY:\d+/.test(output)) return;
+      clearTimeout(timeout);
+      reject(new Error(`Shared-data test server exited with ${code}. ${errors}`));
+    });
+  });
+}
+
 test("server security and concurrent persistence", async (t) => {
   await fs.mkdir(dataDir, { recursive: true });
   await Promise.all(
@@ -149,6 +196,57 @@ test("server security and concurrent persistence", async (t) => {
       threadBody.thread.messages.filter((message) => message.from === "visitor").length,
       count
     );
+  });
+
+  await t.test("preserves live chats across multiple server processes", async () => {
+    const sharedDataDir = path.join(dataDir, "shared-processes");
+    await fs.mkdir(sharedDataDir, { recursive: true });
+    await Promise.all(
+      ["submissions.json", "chats.json", "visits.json", "live-chats.json"].map((name) =>
+        fs.writeFile(path.join(sharedDataDir, name), "[]\n", "utf8")
+      )
+    );
+
+    const servers = await Promise.all([
+      startSharedDataServer(sharedDataDir),
+      startSharedDataServer(sharedDataDir)
+    ]);
+
+    try {
+      const count = 30;
+      const responses = await Promise.all(
+        Array.from({ length: count }, (_, index) =>
+          request(servers[index % servers.length].baseUrl, "/api/live/start", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: `Cross Process ${index}`,
+              phone: `415555${String(1000 + index).slice(-4)}`,
+              email: `cross-process-${index}@example.com`,
+              company: "Gmail",
+              issue: `Concurrent cross-process chat ${index}`
+            })
+          })
+        )
+      );
+      assert.ok(responses.every((response) => response.status === 201));
+
+      const rows = JSON.parse(await fs.readFile(path.join(sharedDataDir, "live-chats.json"), "utf8"));
+      const savedNames = rows
+        .map((thread) => thread.visitor?.name || "")
+        .filter((name) => name.startsWith("Cross Process "));
+      assert.equal(savedNames.length, count);
+      assert.equal(new Set(savedNames).size, count);
+    } finally {
+      servers.forEach(({ child }) => child.kill());
+      await Promise.all(
+        servers.map(({ child }) =>
+          child.exitCode === null
+            ? new Promise((resolve) => child.once("exit", resolve))
+            : Promise.resolve()
+        )
+      );
+    }
   });
 
   await t.test("rate limits repeated failed admin logins", async () => {
