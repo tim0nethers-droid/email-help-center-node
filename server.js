@@ -20,6 +20,8 @@ const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
+const SERVER_REVISION = "v79";
+const SERVER_INSTANCE_ID = crypto.randomBytes(8).toString("hex");
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
@@ -975,6 +977,18 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith("/api/admin/")) {
     if (!isAuthed(req)) {
       jsonError(res, 401, "Admin login required.");
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/diagnostics") {
+      const liveChats = await readLiveChats();
+      send(res, 200, {
+        ok: true,
+        revision: SERVER_REVISION,
+        instanceId: SERVER_INSTANCE_ID,
+        dataStoreId: crypto.createHash("sha256").update(dataDir).digest("hex").slice(0, 16),
+        liveChatCount: liveChats.length
+      });
       return;
     }
 

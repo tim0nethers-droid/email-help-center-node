@@ -112,6 +112,15 @@ test("server security and concurrent persistence", async (t) => {
     assert.match(adminCookie, /HttpOnly/);
     assert.match(adminCookie, /SameSite=Strict/);
 
+    const diagnostics = await request(baseUrl, "/api/admin/diagnostics", {
+      headers: { cookie: adminCookie }
+    });
+    assert.equal(diagnostics.status, 200);
+    const diagnosticBody = await diagnostics.json();
+    assert.equal(diagnosticBody.revision, "v79");
+    assert.match(diagnosticBody.instanceId, /^[a-f0-9]{16}$/);
+    assert.match(diagnosticBody.dataStoreId, /^[a-f0-9]{16}$/);
+
     const cookiePair = adminCookie.split(";", 1)[0];
     const tamperedCookie = `${cookiePair.slice(0, -1)}${cookiePair.endsWith("a") ? "b" : "a"}`;
     const tamperedRequest = await request(baseUrl, "/api/admin/live", {
