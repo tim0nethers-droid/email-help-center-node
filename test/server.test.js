@@ -111,6 +111,13 @@ test("server security and concurrent persistence", async (t) => {
     adminCookie = configuredLogin.headers.get("set-cookie");
     assert.match(adminCookie, /HttpOnly/);
     assert.match(adminCookie, /SameSite=Strict/);
+
+    const cookiePair = adminCookie.split(";", 1)[0];
+    const tamperedCookie = `${cookiePair.slice(0, -1)}${cookiePair.endsWith("a") ? "b" : "a"}`;
+    const tamperedRequest = await request(baseUrl, "/api/admin/live", {
+      headers: { cookie: tamperedCookie }
+    });
+    assert.equal(tamperedRequest.status, 401);
   });
 
   await t.test("preserves every concurrent contact submission", async () => {
@@ -213,6 +220,18 @@ test("server security and concurrent persistence", async (t) => {
     ]);
 
     try {
+      const login = await request(servers[0].baseUrl, "/api/admin/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ adminId: "test-admin", password: "Test-Password-987!" })
+      });
+      assert.equal(login.status, 200);
+      const sharedAdminCookie = login.headers.get("set-cookie");
+      const crossWorkerAdmin = await request(servers[1].baseUrl, "/api/admin/live", {
+        headers: { cookie: sharedAdminCookie }
+      });
+      assert.equal(crossWorkerAdmin.status, 200, "admin session must work on every server process");
+
       const count = 30;
       const responses = await Promise.all(
         Array.from({ length: count }, (_, index) =>

@@ -39,7 +39,6 @@ const files = {
   liveChats: path.join(dataDir, "live-chats.json")
 };
 
-const sessions = new Map();
 const loginAttempts = new Map();
 const mutationQueues = new Map();
 const liveTypingStates = new Map();
@@ -261,13 +260,12 @@ function parseCookies(req) {
 }
 
 function createSession() {
-  const now = Date.now();
-  for (const [existingToken, session] of sessions.entries()) {
-    if (session.expiresAt < now) sessions.delete(existingToken);
-  }
-  const token = crypto.randomBytes(32).toString("hex");
-  sessions.set(token, { createdAt: now, expiresAt: now + SESSION_TTL_MS });
-  return token;
+  const payload = Buffer.from(
+    JSON.stringify({ expiresAt: Date.now() + SESSION_TTL_MS, nonce: crypto.randomBytes(16).toString("hex") }),
+    "utf8"
+  ).toString("base64url");
+  const signature = crypto.createHmac("sha256", `${ADMIN_ID}\0${ADMIN_PASSWORD}`).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
 }
 
 function isValidAdminLogin(adminId, password) {
@@ -319,14 +317,22 @@ function clearLoginAttempts(req) {
 
 function isAuthed(req) {
   const token = parseCookies(req).ehc_session;
-  const session = token ? sessions.get(token) : null;
-  if (!session) return false;
-  if (session.expiresAt < Date.now()) {
-    sessions.delete(token);
+  if (!token) return false;
+  const parts = token.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+
+  const expected = Buffer.from(
+    crypto.createHmac("sha256", `${ADMIN_ID}\0${ADMIN_PASSWORD}`).update(parts[0]).digest("base64url")
+  );
+  const supplied = Buffer.from(parts[1]);
+  if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) return false;
+
+  try {
+    const session = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    return Number(session.expiresAt) > Date.now();
+  } catch {
     return false;
   }
-  session.expiresAt = Date.now() + SESSION_TTL_MS;
-  return true;
 }
 
 async function readBody(req) {
@@ -960,8 +966,6 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/logout") {
-    const token = parseCookies(req).ehc_session;
-    if (token) sessions.delete(token);
     send(res, 200, { ok: true }, "application/json; charset=utf-8", {
       "Set-Cookie": sessionCookie(req, "", 0)
     });
