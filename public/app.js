@@ -3815,6 +3815,12 @@ async function pollAdminLiveAlerts() {
   }
 }
 
+function adminReplyIsActive() {
+  return [document.getElementById("admin-live-reply"), document.getElementById("mobile-chat-input")].some(
+    (input) => input && (document.activeElement === input || Boolean(input.value.trim()))
+  );
+}
+
 async function pollAdminLiveRealtime(content) {
   try {
     const liveFilter = content.dataset.liveFilter || "all";
@@ -3824,6 +3830,19 @@ async function pollAdminLiveRealtime(content) {
     updateAdminSoundAlerts(data.rows);
     adminLiveSnapshot = snapshot;
     document.title = snapshot.unread ? `(${snapshot.unread}) Email Admin` : "Email - Independent Email Guides & Free AI Tools";
+
+    if (adminReplyIsActive()) {
+      data.rows.forEach((row) => {
+        const item = Array.from(document.querySelectorAll("[data-live-thread]")).find((button) => button.dataset.liveThread === row.id);
+        const typing = Boolean(row.typing?.visitorTyping);
+        item?.querySelector(".typing-mini")?.classList.toggle("show", typing);
+        if (item) item.classList.toggle("is-typing", typing);
+        if (content.dataset.selectedThread === row.id) {
+          document.getElementById("admin-visitor-typing")?.classList.toggle("show", typing);
+        }
+      });
+      return;
+    }
 
     const selectedId = content.dataset.selectedThread || (!isAdminMobileLayout() ? data.rows[0]?.id || "" : "");
     const nextSignature = adminRowsSignature(data.rows);

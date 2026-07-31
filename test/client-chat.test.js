@@ -56,3 +56,13 @@ test("chat phone fields add the USA country code automatically", () => {
   assert.match(appSource, /data\.phone = normalizeChatPhone\(data\.phone\)/);
   assert.doesNotMatch(appSource, /phone \|\| "\+1 "/);
 });
+
+test("admin live polling preserves an active reply form", () => {
+  const pollStart = appSource.indexOf("async function pollAdminLiveRealtime(content)");
+  const pollEnd = appSource.indexOf("\nfunction adminLiveDashboard", pollStart);
+  assert.ok(pollStart >= 0 && pollEnd > pollStart);
+  const pollSource = appSource.slice(pollStart, pollEnd);
+  assert.match(appSource, /function adminReplyIsActive\(\)/);
+  assert.match(pollSource, /if \(adminReplyIsActive\(\)\)/);
+  assert.match(pollSource, /return;\s*}\s*\n\s*const selectedId/);
+});
