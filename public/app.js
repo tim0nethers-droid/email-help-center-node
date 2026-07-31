@@ -2338,7 +2338,7 @@ function bindChat() {
     started: Boolean(initialState.started),
     leadData: initialState.leadData || null,
     messages: Array.isArray(initialState.messages) ? initialState.messages : [],
-    sessionId: initialState.sessionId || currentLiveChatSession() || ""
+    sessionId: initialState.sessionId || (initialState.started ? currentLiveChatSession() : "")
   };
   let history = state.messages.slice();
 
@@ -2426,7 +2426,6 @@ function bindChat() {
   };
 
   const input = document.getElementById("chat-input");
-  if (input && issue && !input.value) input.value = issue;
 
   document.querySelector("[data-chat-back]")?.addEventListener("click", () => {
     navigate(`/provider/${chatProvider.id}`);
@@ -2447,7 +2446,6 @@ function bindChat() {
 
   if (leadForm) {
     const handleLeadSubmit = async (event) => {
-      console.log("handleLeadSubmit fired");
       const statusEl = document.getElementById("chat-start-status");
       try {
         event.preventDefault();
@@ -2472,13 +2470,13 @@ function bindChat() {
           name: lead.name,
           email: lead.email,
           phone: lead.phone,
-          company: String(data.company || chatProvider.name || "").trim() || chatProvider.name
+          company: String(data.company || chatProvider.name || "").trim() || chatProvider.name,
+          issue: lead.issue
         });
         const response = await fetch(apiUrl("/api/live/start"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sessionId: state.sessionId || currentLiveChatSession() || chatSessionId(),
             name: lead.name,
             phone: lead.phone,
             email: lead.email,

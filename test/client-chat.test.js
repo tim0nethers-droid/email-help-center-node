@@ -17,6 +17,25 @@ test("AI chat uses the canonical server session and synchronizes messages", () =
   assert.ok(startRequest >= 0);
   assert.ok(startedState > startRequest, "UI must not enter started state before the server responds");
   assert.ok(canonicalSession > startRequest, "UI must persist the canonical server thread ID");
+  assert.match(
+    bindChatSource,
+    /sessionId: initialState\.sessionId \|\| \(initialState\.started \? currentLiveChatSession\(\) : ""\)/,
+    "a new AI lead form must not inherit an unrelated floating-chat session"
+  );
+
+  const startRequestEnd = bindChatSource.indexOf("const json = await readApiJson(response);", startRequest);
+  const startPayloadSource = bindChatSource.slice(startRequest, startRequestEnd);
+  assert.doesNotMatch(
+    startPayloadSource,
+    /sessionId:/,
+    "a submitted AI lead form must let the server create a fresh chat thread"
+  );
+  assert.match(bindChatSource, /issue: lead\.issue\s*\n\s*}\);/, "the saved visitor issue must match the new AI chat");
+  assert.doesNotMatch(
+    bindChatSource,
+    /if \(input && issue && !input\.value\) input\.value = issue;/,
+    "the initial issue must not be duplicated into the reply box"
+  );
 
   const sendStart = bindChatSource.indexOf("async function sendMessage");
   const sendEnd = bindChatSource.indexOf("\n  form.addEventListener", sendStart);
