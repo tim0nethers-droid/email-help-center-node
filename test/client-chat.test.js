@@ -84,3 +84,28 @@ test("public forms and chats use a persistent automatic-retry outbox", () => {
   assert.match(loadSource, /if \(error\.sessionMissing\) \{\s*setCurrentLiveChatSession\(""\)/);
   assert.match(loadSource, /active chat is preserved and will reconnect automatically/);
 });
+
+test("provider chat widget does not collide with the floating live chat widget", () => {
+  assert.doesNotMatch(appSource, /provider-ai-chat-widget" id="live-chat-widget"/);
+  assert.match(appSource, /if \(!content \|\| !toggle \|\| !close\) return;/);
+});
+
+test("public routes update title, description, social metadata, and robots", () => {
+  assert.match(appSource, /function routeMetadata\(\)/);
+  assert.match(appSource, /function updatePageMetadata\(\)/);
+  assert.match(appSource, /document\.title = metadata\.title/);
+  assert.match(appSource, /meta\[name="description"\]/);
+  assert.match(appSource, /meta\[property="og:title"\]/);
+  assert.match(appSource, /meta\[property="og:description"\]/);
+  assert.match(appSource, /robots: "noindex, nofollow"/);
+});
+
+test("generic AI chat heading does not repeat Help", () => {
+  assert.match(appSource, /chatProvider\.id === "email" \? "Email Help Chat"/);
+  assert.doesNotMatch(appSource, /Email Help Help Chat/);
+});
+
+test("reports display the lifetime visit total separately from retained rows", () => {
+  assert.match(appSource, /exported\.totalVisits \?\? visits\.length/);
+  assert.match(appSource, /most recent visit records retained/);
+});

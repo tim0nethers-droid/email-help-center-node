@@ -129,6 +129,26 @@ test("server security and concurrent persistence", async (t) => {
     assert.equal(tamperedRequest.status, 401);
   });
 
+  await t.test("counts visits beyond the 1000-record retention limit", async () => {
+    const retainedVisits = Array.from({ length: 1000 }, (_, index) => ({
+      id: `legacy-visit-${index}`,
+      path: "/",
+      at: new Date(Date.now() - index * 1000).toISOString()
+    }));
+    await fs.writeFile(path.join(dataDir, "visits.json"), `${JSON.stringify(retainedVisits)}\n`, "utf8");
+
+    const page = await request(baseUrl, "/faq");
+    assert.equal(page.status, 200);
+
+    const stats = await request(baseUrl, "/api/admin/stats", { headers: { cookie: adminCookie } });
+    assert.equal(stats.status, 200);
+    assert.equal((await stats.json()).stats.visits, 1001);
+
+    const savedVisits = JSON.parse(await fs.readFile(path.join(dataDir, "visits.json"), "utf8"));
+    assert.equal(savedVisits.length, 1000, "only recent visit details should be retained");
+    assert.equal(savedVisits[0].visitNumber, 1001, "the lifetime visit sequence must continue past the retention limit");
+  });
+
   await t.test("preserves every concurrent contact submission", async () => {
     const count = 20;
     const responses = await Promise.all(

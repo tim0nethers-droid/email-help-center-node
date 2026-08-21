@@ -1062,7 +1062,7 @@ function liveChatWidget() {
   const provider = currentProviderFromPath();
   if (provider) {
     return `
-      <div class="live-chat-widget provider-ai-chat-widget" id="live-chat-widget">
+      <div class="live-chat-widget provider-ai-chat-widget">
         <button class="provider-floating-chat-button" type="button" data-provider-open-chat data-provider-domain="${escapeHtml(providerChatDomain(provider))}" aria-label="Open ${escapeHtml(provider.name)} chat">
           ${icons.bot}
           <span class="provider-floating-badge">1</span>
@@ -1641,7 +1641,7 @@ function chatPage() {
   const state = readChatState(providerDomain);
   const chatStarted = Boolean(state.started);
   const leadData = savedVisitorFormValues({ providerDomain, company: chatProvider.name, issue });
-  const chatTitle = `${chatProvider.name} Help Chat`;
+  const chatTitle = chatProvider.id === "email" ? "Email Help Chat" : `${chatProvider.name} Help Chat`;
   const providerLogo = providers.find((provider) => provider.id === chatProvider.id)?.logo || "";
   const quickReplies = ["Yes, I've already tried that", "Can you explain that differently?", "This started happening today", "How long will this take?", "Request Callback"];
   return chatStarted
@@ -2103,6 +2103,90 @@ function routeContent() {
   return notFoundPage();
 }
 
+function routeMetadata() {
+  const url = new URL(window.location.href);
+  const path = url.pathname.replace(/\/+$/, "") || "/";
+  const parts = path.split("/").filter(Boolean);
+  const defaults = {
+    title: "Email - Independent Email Guides & Free AI Tools",
+    description: "Independent third-party resource providing free self-help guides and AI-style tools for common email issues.",
+    robots: "index, follow"
+  };
+
+  if (path === "/") return defaults;
+  if (path === "/providers") {
+    return { title: "Email Provider Guides | Email Help Center", description: "Browse independent setup, recovery, security, and troubleshooting guides for popular email providers.", robots: defaults.robots };
+  }
+  if (path === "/ai/chat") {
+    const provider = chatProviderFromQuery();
+    const providerName = provider.id === "email" ? "email" : provider.name;
+    return { title: `${provider.id === "email" ? "Email Help" : provider.name} Chat | Email Help Center`, description: `Use our independent self-help chat for step-by-step ${providerName} troubleshooting guidance.`, robots: defaults.robots };
+  }
+
+  const staticPages = {
+    "/ai/inbox-categorizer": ["Inbox Categorizer | Email Help Center", "Sort pasted email subjects into useful inbox categories with a free self-help tool."],
+    "/ai/reply-generator": ["Email Reply Generator | Email Help Center", "Draft clear email replies in friendly, professional, concise, or firm tones."],
+    "/ai/unsubscribe": ["Unsubscribe Helper | Email Help Center", "Identify subscription-style messages and plan a safer inbox cleanup."],
+    "/contact": ["Contact Email Help Center", "Contact our independent email help resource or submit a support ticket."],
+    "/faq": ["Email Help FAQ | Email Help Center", "Answers to common questions about this independent email troubleshooting resource."],
+    "/about": ["About Email Help Center", "Learn about our independent email troubleshooting guides and self-help tools."],
+    "/privacy": ["Privacy Policy | Email Help Center", "Read the Email Help Center privacy policy."],
+    "/terms": ["Terms of Service | Email Help Center", "Read the Email Help Center terms of service."],
+    "/ads": ["Advertising Disclosure | Email Help Center", "Read advertising information and disclosures for Email Help Center."]
+  };
+  if (staticPages[path]) {
+    const [title, description] = staticPages[path];
+    return { title, description, robots: defaults.robots };
+  }
+  if (path === "/search") {
+    const query = url.searchParams.get("q")?.trim();
+    return {
+      title: query ? `Search: ${query} | Email Help Center` : "Search Email Help Guides",
+      description: query ? `Search results for ${query} across independent email provider guides and self-help tools.` : "Search independent email troubleshooting guides and tools.",
+      robots: "noindex, follow"
+    };
+  }
+  if (parts[0] === "provider" && parts[1]) {
+    const provider = findProviderByRoute(parts[1]);
+    if (provider) {
+      if (parts[2] === "article" && parts[3]) {
+        const topicItem = topics.find((item) => item.id === parts[3]);
+        if (topicItem) {
+          return {
+            title: `${provider.name}: ${topicItem.title} | Email Help Center`,
+            description: topicItem.desc,
+            robots: defaults.robots
+          };
+        }
+      }
+      return {
+        title: `${provider.name} Help Guide | Email Help Center`,
+        description: `Independent ${provider.name} setup, security, recovery, and troubleshooting guidance with official support links.`,
+        robots: defaults.robots
+      };
+    }
+  }
+  if (path === "/auth" || path === "/reset-password" || path.startsWith("/admin")) {
+    return { title: "Admin Login | Email Help Center", description: "Restricted Email Help Center administration area.", robots: "noindex, nofollow" };
+  }
+  return { title: "Page Not Found | Email Help Center", description: "The requested Email Help Center page could not be found.", robots: "noindex, follow" };
+}
+
+function updatePageMetadata() {
+  const metadata = routeMetadata();
+  document.title = metadata.title;
+  const values = [
+    ['meta[name="description"]', metadata.description],
+    ['meta[name="robots"]', metadata.robots],
+    ['meta[property="og:title"]', metadata.title],
+    ['meta[property="og:description"]', metadata.description]
+  ];
+  values.forEach(([selector, content]) => {
+    const element = document.querySelector(selector);
+    if (element) element.setAttribute("content", content);
+  });
+}
+
 function render() {
   const internalPath = isInternalPath();
   const isAiChatPath = window.location.pathname.startsWith("/ai/chat");
@@ -2119,6 +2203,7 @@ function render() {
   } else {
     document.body.classList.remove("ai-chat-route");
   }
+  updatePageMetadata();
   bindGlobalEvents();
   bindPageEvents();
 }
@@ -2904,6 +2989,7 @@ function bindLiveChatWidget() {
   const content = document.getElementById("live-chat-content");
   const toggle = document.getElementById("live-chat-toggle");
   const close = document.getElementById("live-chat-close");
+  if (!content || !toggle || !close) return;
 
   async function ensureLiveChatSession() {
     const sessionId = currentLiveChatSession();
@@ -3687,7 +3773,7 @@ function adminReportSummary(exported) {
   const chats = exported.chats || [];
   const visits = exported.visits || [];
   const cards = [
-    ["Total Visits", visits.length, icons.mail, "blue"],
+    ["Total Visits", exported.totalVisits ?? visits.length, icons.mail, "blue"],
     ["Live Chats", liveChats.length, icons.reply, "green"],
     ["Leads", leads.length, icons.inbox, "teal"],
     ["AI Chats", chats.length, icons.bot, "purple"],
@@ -3788,7 +3874,7 @@ function adminReportsPage(exported) {
     <div class="admin-report-toolbar card">
       <div>
         <h2>Reports</h2>
-        <p>Export contains ${leads.length} leads, ${(exported.chats || []).length} AI chat records, ${liveChats.length} live chats, and ${visits.length} visits.</p>
+        <p>Export contains ${leads.length} leads, ${(exported.chats || []).length} AI chat records, ${liveChats.length} live chats, and ${exported.totalVisits ?? visits.length} total visits (${visits.length} most recent visit records retained).</p>
       </div>
       <div class="admin-report-actions">
         <button class="button" id="report-download-json" type="button">Download JSON</button>

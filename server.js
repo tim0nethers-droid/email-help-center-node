@@ -232,6 +232,24 @@ async function appendJson(file, item) {
   });
 }
 
+function totalVisitCount(rows) {
+  const savedTotal = rows.reduce((total, row) => {
+    const visitNumber = Number(row?.visitNumber);
+    return Number.isSafeInteger(visitNumber) && visitNumber > total ? visitNumber : total;
+  }, 0);
+  return Math.max(savedTotal, rows.length);
+}
+
+async function appendVisit(item) {
+  return withMutationLock(files.visits, async () => {
+    const rows = await readJson(files.visits);
+    const visit = { ...item, visitNumber: totalVisitCount(rows) + 1 };
+    rows.unshift(visit);
+    await writeJson(files.visits, rows.slice(0, 1000));
+    return visit;
+  });
+}
+
 function send(res, status, body, contentType = "application/json; charset=utf-8", headers = {}) {
   const payload = typeof body === "string" ? body : JSON.stringify(body);
   res.writeHead(status, {
@@ -1074,7 +1092,7 @@ async function handleApi(req, res, url) {
         stats: {
           leads: leads.length,
           chatMessages: chats.length,
-          visits: visits.length,
+          visits: totalVisitCount(visits),
           liveChats: liveChats.length,
           openLiveChats: liveChats.filter((thread) => thread.status === "open").length,
           waitingChats: liveChats.filter((thread) => thread.status === "open" && (thread.messages || []).some((message) => message.from === "visitor" && !message.readByAdmin)).length,
@@ -1099,7 +1117,8 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/visits") {
-      send(res, 200, { ok: true, rows: await readJson(files.visits) });
+      const visits = await readJson(files.visits);
+      send(res, 200, { ok: true, totalVisits: totalVisitCount(visits), rows: visits });
       return;
     }
 
@@ -1242,7 +1261,7 @@ async function handleApi(req, res, url) {
         readJson(files.visits),
         readLiveChats()
       ]);
-      send(res, 200, { ok: true, exportedAt: new Date().toISOString(), leads, chats, visits, liveChats });
+      send(res, 200, { ok: true, exportedAt: new Date().toISOString(), totalVisits: totalVisitCount(visits), leads, chats, visits, liveChats });
       return;
     }
   }
@@ -1265,7 +1284,7 @@ async function recordVisit(req, url) {
     referrer: req.headers.referer || ""
   };
   try {
-    await appendJson(files.visits, visit);
+    await appendVisit(visit);
   } catch {
     // Analytics should never block the page response.
   }
