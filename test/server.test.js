@@ -93,6 +93,40 @@ test("server security and concurrent persistence", async (t) => {
     assert.equal(response.headers.get("access-control-allow-origin"), null);
   });
 
+  await t.test("serves route-specific SEO metadata and canonical URLs", async () => {
+    const response = await request(baseUrl, "/provider/gmail/article/password-reset");
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("x-robots-tag"), /index, follow/);
+    const html = await response.text();
+    assert.match(html, /<title>Gmail Password Reset Guide \| Email Help Center<\/title>/);
+    assert.match(html, new RegExp(`<link rel="canonical" href="${baseUrl}/provider/gmail/article/password-reset"`));
+    assert.match(html, /"@type":"TechArticle"/);
+    assert.match(html, /"@type":"BreadcrumbList"/);
+  });
+
+  await t.test("serves robots.txt and a complete sitemap", async () => {
+    const robotsResponse = await request(baseUrl, "/robots.txt");
+    assert.equal(robotsResponse.status, 200);
+    assert.match(robotsResponse.headers.get("content-type"), /text\/plain/);
+    const robots = await robotsResponse.text();
+    assert.match(robots, /Disallow: \/admin\//);
+    assert.match(robots, new RegExp(`Sitemap: ${baseUrl}/sitemap.xml`));
+
+    const sitemapResponse = await request(baseUrl, "/sitemap.xml");
+    assert.equal(sitemapResponse.status, 200);
+    assert.match(sitemapResponse.headers.get("content-type"), /application\/xml/);
+    const sitemap = await sitemapResponse.text();
+    assert.match(sitemap, new RegExp(`${baseUrl}/provider/gmail/article/password-reset`));
+    assert.doesNotMatch(sitemap, /\/admin\//);
+  });
+
+  await t.test("returns a crawl-safe 404 for unknown app routes", async () => {
+    const response = await request(baseUrl, "/not-a-real-page");
+    assert.equal(response.status, 404);
+    assert.match(response.headers.get("x-robots-tag"), /noindex/);
+    assert.match(await response.text(), /Page Not Found/);
+  });
+
   let adminCookie = "";
   await t.test("accepts only the configured admin credential pair", async () => {
     const defaultLogin = await request(baseUrl, "/api/admin/login", {

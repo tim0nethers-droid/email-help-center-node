@@ -2108,8 +2108,8 @@ function routeMetadata() {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   const parts = path.split("/").filter(Boolean);
   const defaults = {
-    title: "Email - Independent Email Guides & Free AI Tools",
-    description: "Independent third-party resource providing free self-help guides and AI-style tools for common email issues.",
+    title: "Email Help Center - Independent Email Guides & Free Tools",
+    description: "Independent email troubleshooting guides, provider setup instructions, security tips, and free email tools.",
     robots: "index, follow"
   };
 
@@ -2124,9 +2124,9 @@ function routeMetadata() {
   }
 
   const staticPages = {
-    "/ai/inbox-categorizer": ["Inbox Categorizer | Email Help Center", "Sort pasted email subjects into useful inbox categories with a free self-help tool."],
-    "/ai/reply-generator": ["Email Reply Generator | Email Help Center", "Draft clear email replies in friendly, professional, concise, or firm tones."],
-    "/ai/unsubscribe": ["Unsubscribe Helper | Email Help Center", "Identify subscription-style messages and plan a safer inbox cleanup."],
+    "/ai/inbox-categorizer": ["Free Inbox Categorizer | Email Help Center", "Sort email subjects into useful inbox categories with a free, privacy-conscious tool."],
+    "/ai/reply-generator": ["Free Email Reply Generator | Email Help Center", "Draft clear email replies in friendly, professional, concise, or firm tones."],
+    "/ai/unsubscribe": ["Email Unsubscribe Helper | Email Help Center", "Identify subscription messages and plan a safer inbox cleanup."],
     "/contact": ["Contact Email Help Center", "Contact our independent email help resource or submit a support ticket."],
     "/faq": ["Email Help FAQ | Email Help Center", "Answers to common questions about this independent email troubleshooting resource."],
     "/about": ["About Email Help Center", "Learn about our independent email troubleshooting guides and self-help tools."],
@@ -2175,16 +2175,22 @@ function routeMetadata() {
 function updatePageMetadata() {
   const metadata = routeMetadata();
   document.title = metadata.title;
+  const canonicalUrl = `${window.location.origin}${window.location.pathname.replace(/\/+$/, "") || "/"}`;
   const values = [
     ['meta[name="description"]', metadata.description],
     ['meta[name="robots"]', metadata.robots],
     ['meta[property="og:title"]', metadata.title],
-    ['meta[property="og:description"]', metadata.description]
+    ['meta[property="og:description"]', metadata.description],
+    ['meta[property="og:url"]', canonicalUrl],
+    ['meta[name="twitter:title"]', metadata.title],
+    ['meta[name="twitter:description"]', metadata.description]
   ];
   values.forEach(([selector, content]) => {
     const element = document.querySelector(selector);
     if (element) element.setAttribute("content", content);
   });
+  const canonical = document.querySelector('link[rel="canonical"]');
+  if (canonical) canonical.setAttribute("href", canonicalUrl);
 }
 
 function render() {

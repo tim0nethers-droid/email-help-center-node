@@ -70,6 +70,166 @@ function securityHeaders() {
   };
 }
 
+const seoProviders = new Map([
+  ["gmail", "Gmail"], ["outlook", "Outlook / Hotmail"], ["yahoo", "Yahoo Mail"],
+  ["icloud", "iCloud Mail"], ["protonmail", "Proton Mail"], ["aol", "AOL Mail"],
+  ["att", "AT&T Mail"], ["xfinity", "Xfinity / Comcast"], ["verizon", "Verizon Mail"],
+  ["cox", "Cox Email"], ["spectrum", "Spectrum Email"], ["earthlink", "EarthLink"],
+  ["rogers", "Rogers Yahoo Mail"], ["bell", "Bell Mail"], ["shaw", "Shaw Email"],
+  ["bt", "BT Email"], ["orange", "Orange Mail"], ["t-online", "T-Online Mail"],
+  ["telstra", "Telstra Mail"], ["optus", "OptusNet Email"], ["thunderbird", "Mozilla Thunderbird"],
+  ["apple-mail", "Apple Mail"]
+]);
+
+const seoTopics = new Map([
+  ["password-reset", "Password Reset"], ["cant-log-in", "Can't Log In"],
+  ["mobile-setup", "Mobile Setup"], ["account-hacked", "Account Security & Recovery"],
+  ["not-receiving", "Not Receiving Emails"], ["email-not-working", "Email Not Working"],
+  ["cant-send", "Can't Send Emails"], ["storage-full", "Storage Full"],
+  ["email-forwarding", "Email Forwarding"], ["email-bouncing", "Email Bouncing Back"],
+  ["spam-junk", "Spam & Junk Issues"], ["attachment-issues", "Attachment Issues"],
+  ["desktop-setup", "Desktop Email Setup"], ["2fa-setup", "Two-Factor Authentication Setup"],
+  ["email-sync-issues", "Email Sync Issues"], ["error-messages", "Email Error Messages"]
+]);
+
+const seoStaticPages = new Map([
+  ["/", ["Email Help Center - Independent Email Guides & Free Tools", "Independent email troubleshooting guides, provider setup instructions, security tips, and free email tools."]],
+  ["/providers", ["Email Provider Guides | Email Help Center", "Browse independent setup, recovery, security, and troubleshooting guides for popular email providers."]],
+  ["/ai/chat", ["Email Help Chat | Email Help Center", "Use our independent self-help chat for step-by-step email troubleshooting guidance."]],
+  ["/ai/inbox-categorizer", ["Free Inbox Categorizer | Email Help Center", "Sort email subjects into useful inbox categories with a free, privacy-conscious tool."]],
+  ["/ai/reply-generator", ["Free Email Reply Generator | Email Help Center", "Draft clear email replies in friendly, professional, concise, or firm tones."]],
+  ["/ai/unsubscribe", ["Email Unsubscribe Helper | Email Help Center", "Identify subscription messages and plan a safer inbox cleanup."]],
+  ["/contact", ["Contact Email Help Center", "Contact our independent email help resource or submit a support ticket."]],
+  ["/faq", ["Email Help FAQ | Email Help Center", "Answers to common questions about our independent email troubleshooting guides and tools."]],
+  ["/about", ["About Email Help Center", "Learn about our independent email troubleshooting guides, safety principles, and free tools."]],
+  ["/privacy", ["Privacy Policy | Email Help Center", "Read how Email Help Center collects, uses, and protects information."]],
+  ["/terms", ["Terms of Service | Email Help Center", "Read the terms that apply when using Email Help Center."]],
+  ["/ads", ["Advertising Disclosure | Email Help Center", "Read advertising information and disclosures for Email Help Center."]]
+]);
+
+function htmlEscape(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function publicOrigin(req) {
+  const configured = String(process.env.SITE_URL || "").trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  if (IS_PRODUCTION) return "https://ehc.up.railway.app";
+  const forwardedProto = TRUST_PROXY ? String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() : "";
+  const protocol = forwardedProto || "http";
+  return `${protocol}://${req.headers.host || `localhost:${PORT}`}`;
+}
+
+function routeSeo(pathname) {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  const staticPage = seoStaticPages.get(normalized);
+  if (staticPage) return { title: staticPage[0], description: staticPage[1], robots: "index, follow", status: 200, type: "WebPage" };
+
+  if (normalized === "/search") {
+    return { title: "Search Email Help Guides", description: "Search independent email troubleshooting guides and free tools.", robots: "noindex, follow", status: 200, type: "SearchResultsPage" };
+  }
+  if (normalized === "/auth" || normalized === "/reset-password" || normalized === "/admin" || normalized.startsWith("/admin/")) {
+    return { title: "Admin Login | Email Help Center", description: "Restricted Email Help Center administration area.", robots: "noindex, nofollow", status: 200, type: "WebPage" };
+  }
+
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts[0] === "provider" && parts[1] && seoProviders.has(parts[1])) {
+    const providerName = seoProviders.get(parts[1]);
+    if (parts.length === 2) {
+      return {
+        title: `${providerName} Help Guide | Email Help Center`,
+        description: `Independent ${providerName} setup, security, recovery, and troubleshooting guidance with links to official support.`,
+        robots: "index, follow", status: 200, type: "WebPage", breadcrumbs: [["Providers", "/providers"], [providerName, normalized]]
+      };
+    }
+    if (parts[2] === "article" && parts[3] && seoTopics.has(parts[3]) && parts.length === 4) {
+      const topicName = seoTopics.get(parts[3]);
+      return {
+        title: `${providerName} ${topicName} Guide | Email Help Center`,
+        description: `Step-by-step ${providerName} ${topicName.toLowerCase()} troubleshooting guidance, safety checks, and official support links.`,
+        robots: "index, follow", status: 200, type: "TechArticle",
+        breadcrumbs: [["Providers", "/providers"], [providerName, `/provider/${parts[1]}`], [topicName, normalized]]
+      };
+    }
+  }
+
+  return { title: "Page Not Found | Email Help Center", description: "The requested Email Help Center page could not be found.", robots: "noindex, follow", status: 404, type: "WebPage" };
+}
+
+function structuredData(metadata, canonical, origin) {
+  const entities = [{
+    "@context": "https://schema.org",
+    "@type": metadata.type,
+    name: metadata.title,
+    headline: metadata.type === "TechArticle" ? metadata.title : undefined,
+    description: metadata.description,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: "Email Help Center", url: `${origin}/` },
+    author: metadata.type === "TechArticle" ? { "@type": "Organization", name: "Email Help Center" } : undefined
+  }];
+  if (metadata.breadcrumbs) {
+    entities.push({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: metadata.breadcrumbs.map(([name, item], index) => ({
+        "@type": "ListItem", position: index + 1, name, item: `${origin}${item}`
+      }))
+    });
+  }
+  return JSON.stringify(entities.length === 1 ? entities[0] : entities).replace(/</g, "\\u003c");
+}
+
+function renderSeoHead(metadata, canonical, origin) {
+  const title = htmlEscape(metadata.title);
+  const description = htmlEscape(metadata.description);
+  const url = htmlEscape(canonical);
+  return `<!-- SEO_HEAD_START -->
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${url}" />
+    <meta name="author" content="Email Help Center" />
+    <meta name="robots" content="${htmlEscape(metadata.robots)}" />
+    <meta name="disclaimer" content="Independent email guide; not affiliated with any email provider." />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:type" content="${metadata.type === "TechArticle" ? "article" : "website"}" />
+    <meta property="og:site_name" content="Email Help Center" />
+    <meta property="og:url" content="${url}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <script type="application/ld+json">${structuredData(metadata, canonical, origin)}</script>
+    <!-- SEO_HEAD_END -->`;
+}
+
+function sitemapXml(origin) {
+  const urls = [...seoStaticPages.keys()];
+  for (const providerId of seoProviders.keys()) {
+    urls.push(`/provider/${providerId}`);
+    for (const topicId of seoTopics.keys()) urls.push(`/provider/${providerId}/article/${topicId}`);
+  }
+  const nodes = urls.map((pathname) => `  <url><loc>${htmlEscape(`${origin}${pathname === "/" ? "/" : pathname}`)}</loc></url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${nodes}\n</urlset>\n`;
+}
+
+function renderAppDocument(req, url, source) {
+  const metadata = routeSeo(url.pathname);
+  const origin = publicOrigin(req);
+  const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
+  const canonical = `${origin}${normalizedPath === "/" ? "/" : normalizedPath}`;
+  const head = renderSeoHead(metadata, canonical, origin);
+  const fallback = `<main><h1>${htmlEscape(metadata.title)}</h1><p>${htmlEscape(metadata.description)}</p></main>`;
+  const html = String(source)
+    .replace(/<!-- SEO_HEAD_START -->[\s\S]*?<!-- SEO_HEAD_END -->/, head)
+    .replace('<div id="app"></div>', `<div id="app">${fallback}</div>`);
+  return { html, metadata };
+}
+
 function validateConfiguration() {
   if (IS_PRODUCTION && ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD && !readStoredAdminAuth()) {
     console.warn("WARNING: Admin login is disabled until a strong ADMIN_PASSWORD is configured.");
@@ -1300,6 +1460,28 @@ function safePublicPath(urlPathname) {
 }
 
 async function serveStaticOrApp(req, res, url) {
+  const origin = publicOrigin(req);
+  if (url.pathname === "/robots.txt") {
+    const body = [
+      "User-agent: *",
+      "Allow: /",
+      "Disallow: /admin/",
+      "Disallow: /auth",
+      "Disallow: /reset-password",
+      "Disallow: /api/",
+      `Sitemap: ${origin}/sitemap.xml`,
+      ""
+    ].join("\n");
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600", ...securityHeaders() });
+    res.end(body);
+    return;
+  }
+  if (url.pathname === "/sitemap.xml") {
+    res.writeHead(200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600", ...securityHeaders() });
+    res.end(sitemapXml(origin));
+    return;
+  }
+
   await recordVisit(req, url);
   let filePath = safePublicPath(url.pathname);
   if (!filePath) {
@@ -1312,6 +1494,17 @@ async function serveStaticOrApp(req, res, url) {
     if (stats.isDirectory()) filePath = path.join(filePath, "index.html");
     const data = await fsp.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
+    if (ext === ".html") {
+      const rendered = renderAppDocument(req, url, data);
+      res.writeHead(rendered.metadata.status, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Robots-Tag": rendered.metadata.robots,
+        ...securityHeaders()
+      });
+      res.end(rendered.html);
+      return;
+    }
     const cacheControl = [".html", ".css", ".js"].includes(ext) ? "no-cache" : "public, max-age=3600";
     res.writeHead(200, {
       "Content-Type": mimeTypes[ext] || "application/octet-stream",
@@ -1321,12 +1514,14 @@ async function serveStaticOrApp(req, res, url) {
     res.end(data);
   } catch {
     const app = await fsp.readFile(path.join(publicDir, "index.html"));
-    res.writeHead(200, {
+    const rendered = renderAppDocument(req, url, app);
+    res.writeHead(rendered.metadata.status, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-cache",
+      "X-Robots-Tag": rendered.metadata.robots,
       ...securityHeaders()
     });
-    res.end(app);
+    res.end(rendered.html);
   }
 }
 
