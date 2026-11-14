@@ -102,6 +102,21 @@ test("server security and concurrent persistence", async (t) => {
     assert.match(html, new RegExp(`<link rel="canonical" href="${baseUrl}/provider/gmail/article/password-reset"`));
     assert.match(html, /"@type":"TechArticle"/);
     assert.match(html, /"@type":"BreadcrumbList"/);
+    assert.match(html, /hreflang="en"/);
+  });
+
+  await t.test("serves rich structured data for home, FAQ, and free tools", async () => {
+    const homeHtml = await (await request(baseUrl, "/")).text();
+    assert.match(homeHtml, /"@type":"SearchAction"/);
+    assert.match(homeHtml, /"@type":"Organization"/);
+
+    const faqHtml = await (await request(baseUrl, "/faq")).text();
+    assert.match(faqHtml, /"@type":"FAQPage"/);
+    assert.match(faqHtml, /"@type":"Question"/);
+
+    const toolHtml = await (await request(baseUrl, "/ai/reply-generator")).text();
+    assert.match(toolHtml, /"@type":"SoftwareApplication"/);
+    assert.match(toolHtml, /"price":"0"/);
   });
 
   await t.test("serves robots.txt and a complete sitemap", async () => {
@@ -117,7 +132,19 @@ test("server security and concurrent persistence", async (t) => {
     assert.match(sitemapResponse.headers.get("content-type"), /application\/xml/);
     const sitemap = await sitemapResponse.text();
     assert.match(sitemap, new RegExp(`${baseUrl}/provider/gmail/article/password-reset`));
+    assert.match(sitemap, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
     assert.doesNotMatch(sitemap, /\/admin\//);
+  });
+
+  await t.test("compresses and caches versioned static assets", async () => {
+    const response = await request(baseUrl, "/app.js?v=82", {
+      headers: { "accept-encoding": "gzip" }
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-encoding"), "gzip");
+    assert.match(response.headers.get("cache-control"), /max-age=31536000/);
+    assert.match(response.headers.get("cache-control"), /immutable/);
+    assert.equal(response.headers.get("vary"), "Accept-Encoding");
   });
 
   await t.test("returns a crawl-safe 404 for unknown app routes", async () => {
@@ -151,7 +178,7 @@ test("server security and concurrent persistence", async (t) => {
     });
     assert.equal(diagnostics.status, 200);
     const diagnosticBody = await diagnostics.json();
-    assert.equal(diagnosticBody.revision, "v81");
+    assert.equal(diagnosticBody.revision, "v82");
     assert.match(diagnosticBody.instanceId, /^[a-f0-9]{16}$/);
     assert.match(diagnosticBody.dataStoreId, /^[a-f0-9]{16}$/);
 

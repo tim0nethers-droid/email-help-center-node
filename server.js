@@ -3,6 +3,7 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -20,8 +21,9 @@ const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
 const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
-const SERVER_REVISION = "v81";
+const SERVER_REVISION = "v82";
 const SERVER_INSTANCE_ID = crypto.randomBytes(8).toString("hex");
+const SEO_LAST_MODIFIED = fs.statSync(__filename).mtime.toISOString().slice(0, 10);
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, "public");
@@ -70,6 +72,36 @@ function securityHeaders() {
   };
 }
 
+function sendOptimized(req, res, status, headers, body) {
+  const source = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+  const contentType = String(headers["Content-Type"] || "");
+  const compressible = /^(text\/|application\/(javascript|json|xml))/i.test(contentType);
+  const accepted = String(req.headers["accept-encoding"] || "");
+  let payload = source;
+  let encoding = "";
+
+  if (compressible && source.length >= 1024) {
+    if (/\bbr\b/i.test(accepted)) {
+      payload = zlib.brotliCompressSync(source, {
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 }
+      });
+      encoding = "br";
+    } else if (/\bgzip\b/i.test(accepted)) {
+      payload = zlib.gzipSync(source, { level: 6 });
+      encoding = "gzip";
+    }
+  }
+
+  const responseHeaders = {
+    ...headers,
+    "Content-Length": payload.length,
+    ...(compressible ? { Vary: "Accept-Encoding" } : {}),
+    ...(encoding ? { "Content-Encoding": encoding } : {})
+  };
+  res.writeHead(status, responseHeaders);
+  res.end(req.method === "HEAD" ? undefined : payload);
+}
+
 const seoProviders = new Map([
   ["gmail", "Gmail"], ["outlook", "Outlook / Hotmail"], ["yahoo", "Yahoo Mail"],
   ["icloud", "iCloud Mail"], ["protonmail", "Proton Mail"], ["aol", "AOL Mail"],
@@ -107,6 +139,15 @@ const seoStaticPages = new Map([
   ["/ads", ["Advertising Disclosure | Email Help Center", "Read advertising information and disclosures for Email Help Center."]]
 ]);
 
+const seoFaqItems = [
+  ["Are you official support for Gmail, Outlook, Yahoo, or Apple?", "No. This is an independent educational website. We provide guides and self-help tools only."],
+  ["Can you reset my password?", "No. We cannot access accounts or reset passwords. Use the official recovery page for your email provider."],
+  ["Is the chat a real human agent?", "The chat is a rule-based self-help assistant that provides troubleshooting steps and stores transcripts for your site admin."],
+  ["Should I enter my password or OTP in the form?", "No. Never submit passwords, OTPs, recovery codes, or private mailbox content in any form or chat."],
+  ["Where do contact form submissions go?", "They are saved locally on the Node.js server and are visible to the site administrator."],
+  ["How do I change the admin password?", "The site owner can update the server-configured admin password."]
+];
+
 function htmlEscape(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -128,7 +169,18 @@ function publicOrigin(req) {
 function routeSeo(pathname) {
   const normalized = pathname.replace(/\/+$/, "") || "/";
   const staticPage = seoStaticPages.get(normalized);
-  if (staticPage) return { title: staticPage[0], description: staticPage[1], robots: "index, follow", status: 200, type: "WebPage" };
+  if (staticPage) {
+    const type = normalized === "/faq"
+      ? "FAQPage"
+      : normalized === "/about"
+        ? "AboutPage"
+        : normalized === "/contact"
+          ? "ContactPage"
+          : normalized.startsWith("/ai/")
+            ? "SoftwareApplication"
+            : "WebPage";
+    return { title: staticPage[0], description: staticPage[1], robots: "index, follow", status: 200, type };
+  }
 
   if (normalized === "/search") {
     return { title: "Search Email Help Guides", description: "Search independent email troubleshooting guides and free tools.", robots: "noindex, follow", status: 200, type: "SearchResultsPage" };
@@ -162,26 +214,61 @@ function routeSeo(pathname) {
 }
 
 function structuredData(metadata, canonical, origin) {
-  const entities = [{
-    "@context": "https://schema.org",
+  const page = {
     "@type": metadata.type,
     name: metadata.title,
     headline: metadata.type === "TechArticle" ? metadata.title : undefined,
     description: metadata.description,
     url: canonical,
+    inLanguage: "en",
     isPartOf: { "@type": "WebSite", name: "Email Help Center", url: `${origin}/` },
-    author: metadata.type === "TechArticle" ? { "@type": "Organization", name: "Email Help Center" } : undefined
-  }];
+    mainEntityOfPage: metadata.type === "TechArticle" ? { "@type": "WebPage", "@id": canonical } : undefined,
+    author: metadata.type === "TechArticle" ? { "@type": "Organization", name: "Email Help Center", url: `${origin}/about` } : undefined,
+    publisher: metadata.type === "TechArticle" ? { "@type": "Organization", name: "Email Help Center", url: `${origin}/about` } : undefined,
+    dateModified: metadata.type === "TechArticle" ? SEO_LAST_MODIFIED : undefined,
+    applicationCategory: metadata.type === "SoftwareApplication" ? "UtilitiesApplication" : undefined,
+    operatingSystem: metadata.type === "SoftwareApplication" ? "Any" : undefined,
+    offers: metadata.type === "SoftwareApplication" ? { "@type": "Offer", price: "0", priceCurrency: "USD" } : undefined,
+    mainEntity: metadata.type === "FAQPage"
+      ? seoFaqItems.map(([name, text]) => ({
+        "@type": "Question",
+        name,
+        acceptedAnswer: { "@type": "Answer", text }
+      }))
+      : undefined
+  };
+  const entities = [page];
+
+  if (canonical === `${origin}/`) {
+    entities.push({
+      "@type": "WebSite",
+      "@id": `${origin}/#website`,
+      name: "Email Help Center",
+      url: `${origin}/`,
+      inLanguage: "en",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${origin}/search?q={search_term_string}` },
+        "query-input": "required name=search_term_string"
+      }
+    });
+    entities.push({
+      "@type": "Organization",
+      "@id": `${origin}/#organization`,
+      name: "Email Help Center",
+      url: `${origin}/`,
+      description: "Independent email troubleshooting guides and self-help tools."
+    });
+  }
   if (metadata.breadcrumbs) {
     entities.push({
-      "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: metadata.breadcrumbs.map(([name, item], index) => ({
         "@type": "ListItem", position: index + 1, name, item: `${origin}${item}`
       }))
     });
   }
-  return JSON.stringify(entities.length === 1 ? entities[0] : entities).replace(/</g, "\\u003c");
+  return JSON.stringify({ "@context": "https://schema.org", "@graph": entities }).replace(/</g, "\\u003c");
 }
 
 function renderSeoHead(metadata, canonical, origin) {
@@ -199,10 +286,13 @@ function renderSeoHead(metadata, canonical, origin) {
     <meta property="og:description" content="${description}" />
     <meta property="og:type" content="${metadata.type === "TechArticle" ? "article" : "website"}" />
     <meta property="og:site_name" content="Email Help Center" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="${url}" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${description}" />
+    <link rel="alternate" hreflang="en" href="${url}" />
+    <link rel="alternate" hreflang="x-default" href="${url}" />
     <script type="application/ld+json">${structuredData(metadata, canonical, origin)}</script>
     <!-- SEO_HEAD_END -->`;
 }
@@ -213,7 +303,7 @@ function sitemapXml(origin) {
     urls.push(`/provider/${providerId}`);
     for (const topicId of seoTopics.keys()) urls.push(`/provider/${providerId}/article/${topicId}`);
   }
-  const nodes = urls.map((pathname) => `  <url><loc>${htmlEscape(`${origin}${pathname === "/" ? "/" : pathname}`)}</loc></url>`).join("\n");
+  const nodes = urls.map((pathname) => `  <url><loc>${htmlEscape(`${origin}${pathname === "/" ? "/" : pathname}`)}</loc><lastmod>${SEO_LAST_MODIFIED}</lastmod></url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${nodes}\n</urlset>\n`;
 }
 
@@ -1472,13 +1562,11 @@ async function serveStaticOrApp(req, res, url) {
       `Sitemap: ${origin}/sitemap.xml`,
       ""
     ].join("\n");
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600", ...securityHeaders() });
-    res.end(body);
+    sendOptimized(req, res, 200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600", ...securityHeaders() }, body);
     return;
   }
   if (url.pathname === "/sitemap.xml") {
-    res.writeHead(200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600", ...securityHeaders() });
-    res.end(sitemapXml(origin));
+    sendOptimized(req, res, 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600", ...securityHeaders() }, sitemapXml(origin));
     return;
   }
 
@@ -1496,32 +1584,34 @@ async function serveStaticOrApp(req, res, url) {
     const ext = path.extname(filePath).toLowerCase();
     if (ext === ".html") {
       const rendered = renderAppDocument(req, url, data);
-      res.writeHead(rendered.metadata.status, {
+      sendOptimized(req, res, rendered.metadata.status, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-cache",
         "X-Robots-Tag": rendered.metadata.robots,
         ...securityHeaders()
-      });
-      res.end(rendered.html);
+      }, rendered.html);
       return;
     }
-    const cacheControl = [".html", ".css", ".js"].includes(ext) ? "no-cache" : "public, max-age=3600";
-    res.writeHead(200, {
+    const versionedAsset = [".css", ".js"].includes(ext) && url.searchParams.has("v");
+    const cacheControl = versionedAsset
+      ? "public, max-age=31536000, immutable"
+      : [".html", ".css", ".js"].includes(ext)
+        ? "public, max-age=300"
+        : "public, max-age=3600";
+    sendOptimized(req, res, 200, {
       "Content-Type": mimeTypes[ext] || "application/octet-stream",
       "Cache-Control": cacheControl,
       ...securityHeaders()
-    });
-    res.end(data);
+    }, data);
   } catch {
     const app = await fsp.readFile(path.join(publicDir, "index.html"));
     const rendered = renderAppDocument(req, url, app);
-    res.writeHead(rendered.metadata.status, {
+    sendOptimized(req, res, rendered.metadata.status, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-cache",
       "X-Robots-Tag": rendered.metadata.robots,
       ...securityHeaders()
-    });
-    res.end(rendered.html);
+    }, rendered.html);
   }
 }
 
