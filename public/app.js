@@ -2418,6 +2418,13 @@ function chatSessionId() {
   return id;
 }
 
+function publicChatMessageHtml(text, isVisitor) {
+  if (!isVisitor && text === "Thank you. I will call you back shortly.") {
+    return 'Thanks! For help with this chat, call <a href="tel:+18778187457"><strong>1-877-818-7457</strong></a>.';
+  }
+  return escapeHtml(text);
+}
+
 function bindChat() {
   const windowEl = document.getElementById("chat-window");
   const form = document.getElementById("chat-form");
@@ -2472,11 +2479,7 @@ function bindChat() {
     windowEl.innerHTML = history
       .map((message) => {
         const isVisitor = message.role === "user";
-        const isGmailCallbackReply = chatProvider.id === "gmail" && message.role === "bot" &&
-          message.text === "Thank you. I will call you back shortly.";
-        const messageText = isGmailCallbackReply
-          ? 'Thanks! For help with this chat, call <a href="tel:+18778187457"><strong>1-877-818-7457</strong></a>.'
-          : escapeHtml(message.text).replace(/\n/g, "<br>");
+        const messageText = publicChatMessageHtml(message.text, isVisitor).replace(/\n/g, "<br>");
         return `<div class="chat-message ${isVisitor ? "user" : "bot"}"><span class="chat-label">${isVisitor ? "You" : "Assistant"}</span><div class="chat-text">${messageText}</div></div>`;
       })
       .join("");
@@ -3219,7 +3222,7 @@ function bindLiveChatWidget() {
             (message) => `
             <div class="live-msg ${message.from === "visitor" ? "visitor" : "agent"}">
               <span>${message.from === "visitor" ? "You" : escapeHtml(message.name || "Support Team")}</span>
-              <p>${escapeHtml(message.text)}</p>
+              <p>${publicChatMessageHtml(message.text, message.from === "visitor")}</p>
               <small>${formatDate(message.createdAt)}</small>
             </div>`
           )
