@@ -1664,6 +1664,11 @@ function chatPage() {
                 <div class="ai-chat-live-status"><i></i> Online</div>
                 <button class="button ghost small" type="button" data-chat-reset>New Chat</button>
               </div>
+              ${chatProvider.id === "gmail" && state.sessionId ? `
+                <div class="notice info" role="status">
+                  Your chat form was submitted. For questions about this website or your submission, call Email Help Center at <a href="tel:+18778187457">1-877-818-7457</a>.
+                </div>
+              ` : ""}
               <div id="chat-window" class="chat-window ai-chat-window"></div>
               <div class="quick-reply-row quick-replies">
                 ${quickReplies
