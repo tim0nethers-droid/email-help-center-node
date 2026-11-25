@@ -2418,8 +2418,9 @@ function chatSessionId() {
   return id;
 }
 
-function publicChatMessageHtml(text, isVisitor) {
-  if (!isVisitor && text === "Thank you. I will call you back shortly.") {
+function chatMessageHtml(text, isVisitor) {
+  if (!isVisitor && (text === "Thank you. I will call you back shortly." ||
+      text === "Thanks! For help with this chat, call 1-877-818-7457.")) {
     return 'Thanks! For help with this chat, call <a href="tel:+18778187457"><strong>1-877-818-7457</strong></a>.';
   }
   return escapeHtml(text);
@@ -2479,7 +2480,7 @@ function bindChat() {
     windowEl.innerHTML = history
       .map((message) => {
         const isVisitor = message.role === "user";
-        const messageText = publicChatMessageHtml(message.text, isVisitor).replace(/\n/g, "<br>");
+        const messageText = chatMessageHtml(message.text, isVisitor).replace(/\n/g, "<br>");
         return `<div class="chat-message ${isVisitor ? "user" : "bot"}"><span class="chat-label">${isVisitor ? "You" : "Assistant"}</span><div class="chat-text">${messageText}</div></div>`;
       })
       .join("");
@@ -3222,7 +3223,7 @@ function bindLiveChatWidget() {
             (message) => `
             <div class="live-msg ${message.from === "visitor" ? "visitor" : "agent"}">
               <span>${message.from === "visitor" ? "You" : escapeHtml(message.name || "Support Team")}</span>
-              <p>${publicChatMessageHtml(message.text, message.from === "visitor")}</p>
+              <p>${chatMessageHtml(message.text, message.from === "visitor")}</p>
               <small>${formatDate(message.createdAt)}</small>
             </div>`
           )
@@ -3849,7 +3850,7 @@ function adminLiveChatDetails(exported) {
                   ${(thread.messages || [])
                     .map(
                       (message) => `
-                      <p><strong>${escapeHtml(message.name || (message.from === "visitor" ? "Visitor" : "Support Team"))}:</strong> ${escapeHtml(message.text || "")}<br><small>${formatDate(message.createdAt)}</small></p>`
+                      <p><strong>${escapeHtml(message.name || (message.from === "visitor" ? "Visitor" : "Support Team"))}:</strong> ${chatMessageHtml(message.text || "", message.from === "visitor")}<br><small>${formatDate(message.createdAt)}</small></p>`
                     )
                     .join("")}
                 </div>
@@ -4223,7 +4224,7 @@ function renderMobileChatMessages(thread) {
       (message) => `
       <div class="live-msg ${message.from === "visitor" ? "visitor" : "agent"}">
         <span>${message.from === "visitor" ? escapeHtml(thread.visitor?.name || "Visitor") : escapeHtml(message.name || "Support Team")}</span>
-        <p>${escapeHtml(message.text || "")}</p>
+        <p>${chatMessageHtml(message.text || "", message.from === "visitor")}</p>
         <small>${formatDate(message.createdAt)}</small>
       </div>`
     )
@@ -4524,7 +4525,7 @@ async function loadAdminLiveThread(threadId, options = {}) {
             (message) => `
             <div class="live-msg ${message.from === "visitor" ? "visitor" : "agent"}">
               <span>${message.from === "visitor" ? escapeHtml(thread.visitor?.name || "Visitor") : escapeHtml(message.name || "Support Team")}</span>
-              <p>${escapeHtml(message.text)}</p>
+              <p>${chatMessageHtml(message.text, message.from === "visitor")}</p>
               <small>${formatDate(message.createdAt)}</small>
             </div>`
           )
@@ -4744,7 +4745,7 @@ async function loadAdmin(kind, content) {
               <div id="admin-password-status" aria-live="polite"></div>
             </form>
           </div></div>
-          <div class="card"><div class="card-body"><h3>Auto Reply Message</h3><p>Thank you. I will call you back shortly.</p><p class="helper">This default message is sent once when a visitor starts a live chat.</p></div></div>
+          <div class="card"><div class="card-body"><h3>Auto Reply Message</h3><p>${chatMessageHtml("Thanks! For help with this chat, call 1-877-818-7457.", false)}</p><p class="helper">This default message is sent once when a visitor starts a live chat.</p></div></div>
         </div>`;
       bindAdminPasswordSettings();
       return;

@@ -20,7 +20,7 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const TICKET_TIMEZONE = process.env.TICKET_TIMEZONE || process.env.TZ || "Asia/Kolkata";
-const AUTO_REPLY_MESSAGE = "Thank you. I will call you back shortly.";
+const AUTO_REPLY_MESSAGE = "Thanks! For help with this chat, call 1-877-818-7457.";
 const SERVER_REVISION = "v82";
 const SERVER_INSTANCE_ID = crypto.randomBytes(8).toString("hex");
 const SEO_LAST_MODIFIED = fs.statSync(__filename).mtime.toISOString().slice(0, 10);

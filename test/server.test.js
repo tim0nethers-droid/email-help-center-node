@@ -254,6 +254,10 @@ test("server security and concurrent persistence", async (t) => {
     assert.ok(startedBody.thread.id);
     assert.notEqual(startedBody.thread.id, clientSessionId);
     assert.equal(startedBody.thread.visitor.phone, "+1 415 555 0198");
+    assert.equal(
+      startedBody.thread.messages.find((message) => message.autoReply)?.text,
+      "Thanks! For help with this chat, call 1-877-818-7457."
+    );
 
     const sent = await request(baseUrl, "/api/live/message", {
       method: "POST",
