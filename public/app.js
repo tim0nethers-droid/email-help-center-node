@@ -2469,19 +2469,16 @@ function bindChat() {
 
   const draw = () => {
     if (!windowEl) return;
-    const messages = history
-      .map(
-        (message) =>
-          `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
-      )
+    windowEl.innerHTML = history
+      .map((message) => {
+        const isVisitor = message.role === "user";
+        const showCallLink = chatProvider.id === "gmail" && message.role === "bot" &&
+          message.text === "Thank you. I will call you back shortly.";
+        const callLink = showCallLink ? '<br>Call this number: <a href="tel:+18778187457">1-877-818-7457</a>' : "";
+        const messageText = escapeHtml(message.text).replace(/\n/g, "<br>");
+        return `<div class="chat-message ${isVisitor ? "user" : "bot"}"><span class="chat-label">${isVisitor ? "You" : "Assistant"}</span><div class="chat-text">${messageText}${callLink}</div></div>`;
+      })
       .join("");
-    const contactConfirmation = state.started && chatProvider.id === "gmail"
-      ? `<div class="chat-message bot">
-          <span class="chat-label">Email Help Center</span>
-          <div class="chat-text">Your chat form was submitted. For questions about this website or your submission, <a href="tel:+18778187457">call 1-877-818-7457</a>.</div>
-        </div>`
-      : "";
-    windowEl.innerHTML = messages + contactConfirmation;
     windowEl.scrollTop = windowEl.scrollHeight;
     persist();
   };
