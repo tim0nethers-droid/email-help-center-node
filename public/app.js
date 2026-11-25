@@ -1664,11 +1664,6 @@ function chatPage() {
                 <div class="ai-chat-live-status"><i></i> Online</div>
                 <button class="button ghost small" type="button" data-chat-reset>New Chat</button>
               </div>
-              ${chatProvider.id === "gmail" && state.sessionId ? `
-                <div class="notice info" role="status">
-                  Your chat form was submitted. For questions about this website or your submission, call Email Help Center at <a href="tel:+18778187457">1-877-818-7457</a>.
-                </div>
-              ` : ""}
               <div id="chat-window" class="chat-window ai-chat-window"></div>
               <div class="quick-reply-row quick-replies">
                 ${quickReplies
@@ -2474,12 +2469,19 @@ function bindChat() {
 
   const draw = () => {
     if (!windowEl) return;
-    windowEl.innerHTML = history
+    const messages = history
       .map(
         (message) =>
           `<div class="chat-message ${message.role === "user" ? "user" : "bot"}"><span class="chat-label">${message.role === "user" ? "You" : "Assistant"}</span><div class="chat-text">${escapeHtml(message.text).replace(/\n/g, "<br>")}</div></div>`
       )
       .join("");
+    const contactConfirmation = state.started && chatProvider.id === "gmail"
+      ? `<div class="chat-message bot">
+          <span class="chat-label">Email Help Center</span>
+          <div class="chat-text">Your chat form was submitted. For questions about this website or your submission, <a href="tel:+18778187457">call 1-877-818-7457</a>.</div>
+        </div>`
+      : "";
+    windowEl.innerHTML = messages + contactConfirmation;
     windowEl.scrollTop = windowEl.scrollHeight;
     persist();
   };
